@@ -1,19 +1,38 @@
-// Top-level shell. Renders the header and the calendar.
-// Detail-panel state (which date is selected, if any) lives here so the
-// CalendarGrid and DetailPanel can both read/write it.
+// Top-level shell. Owns the visible month, the selected date, and the
+// fetched filings. Re-fetches whenever the visible month changes so we
+// only ever pull one month of data at a time.
 
-import { useEffect, useState } from "react";
-import { getRecentFilings } from "./lib/filingsClient";
-import type { Filing } from "./lib/filingsClient";
+import { useEffect, useMemo, useState } from "react";
+import {
+  getFilingsInWindow,
+  groupByDate,
+  type Filing,
+} from "./lib/filingsClient";
+import {
+  type MonthRef,
+  daysInMonth,
+  formatIso,
+  todayIso,
+  todayMonth,
+} from "./lib/calendarUtils";
+import CalendarGrid from "./components/CalendarGrid";
+import DetailPanel from "./components/DetailPanel";
 import "./App.css";
 
 export default function App() {
+  const [month, setMonth] = useState<MonthRef>(() => todayMonth());
   const [filings, setFilings] = useState<Filing[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
+  // Reload filings whenever the visible month changes.
   useEffect(() => {
-    getRecentFilings(30)
+    const start = formatIso(month.year, month.month, 1);
+    const end = formatIso(month.year, month.month, daysInMonth(month));
+    setLoading(true);
+    setError(null);
+    getFilingsInWindow(start, end)
       .then((data) => {
         setFilings(data);
         setLoading(false);
@@ -23,7 +42,17 @@ export default function App() {
         setError(err instanceof Error ? err.message : "Failed to load filings");
         setLoading(false);
       });
-  }, []);
+  }, [month.year, month.month]);
+
+  const filingsByDate = useMemo(() => groupByDate(filings), [filings]);
+  const selectedFilings = selectedDate
+    ? filingsByDate[selectedDate] || []
+    : [];
+
+  function jumpToToday() {
+    setMonth(todayMonth());
+    setSelectedDate(todayIso());
+  }
 
   return (
     <div className="app">
@@ -38,16 +67,26 @@ export default function App() {
       <main className="app-main">
         <h1 className="page-title">Calendar</h1>
         <p className="page-subtitle">
-          Live SEC filings — S-1, S-1/A, F-1, F-1/A, RW, 424B — from the last 30 days.
+          Track SEC filing events on a visual calendar. Click any date to see
+          the filings that landed that day.
         </p>
 
-        {loading && <div className="status">Loading filings…</div>}
         {error && <div className="status error">Error: {error}</div>}
-        {!loading && !error && (
-          <div className="status">
-            Loaded {filings.length} filings. Calendar UI ships in the next iteration.
-          </div>
-        )}
+
+        <div className={`calendar-layout ${loading ? "is-loading" : ""}`}>
+          <CalendarGrid
+            month={month}
+            onMonthChange={setMonth}
+            filingsByDate={filingsByDate}
+            selectedDate={selectedDate}
+            onSelectDate={setSelectedDate}
+            onJumpToToday={jumpToToday}
+          />
+          <DetailPanel
+            selectedDate={selectedDate}
+            filings={selectedFilings}
+          />
+        </div>
       </main>
 
       <footer className="app-footer">
