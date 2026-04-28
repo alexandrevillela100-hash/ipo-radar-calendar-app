@@ -68,6 +68,27 @@
 .status.error {
   border-color: var(--red);
   color: var(--red);
+  margin-bottom: var(--space-5);
+}
+
+.calendar-layout {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: var(--space-5);
+  align-items: start;
+  margin-top: var(--space-4);
+}
+
+.calendar-layout.is-loading {
+  opacity: 0.55;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+}
+
+@media (max-width: 900px) {
+  .calendar-layout {
+    grid-template-columns: 1fr;
+  }
 }
 
 .app-footer {
