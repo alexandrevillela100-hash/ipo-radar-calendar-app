@@ -23,7 +23,6 @@ export default function App() {
         setError(err instanceof Error ? err.message : "Failed to load filings");
         setLoading(false);
       });
-      });
   }, []);
 
   return (
