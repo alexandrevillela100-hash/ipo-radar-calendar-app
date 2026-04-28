@@ -21,20 +21,21 @@ export default function DetailPanel({ selectedDate, filings }: Props) {
         <h3 className="panel-title">Select a date</h3>
         <p className="panel-empty-text">
           Click any day in the calendar to see SEC filing events for that
-          date — initial registrations, amendments, final pricing, withdrawals.
+          date - initial registrations, amendments, final pricing, withdrawals.
         </p>
       </aside>
     );
   }
 
+  let countLabel = "";
+  if (filings.length === 0) countLabel = "No filings on this date.";
+  else if (filings.length === 1) countLabel = "1 filing";
+  else countLabel = filings.length + " filings";
+
   return (
     <aside className="detail-panel">
       <h3 className="panel-title">{prettyDate(selectedDate)}</h3>
-      <p className="panel-count">
-        {filings.length === 0
-          ? "No filings on this date."
-          : `${filings.length} filing${filings.length === 1 ? "" : "s"}`}
-      </p>
+      <p className="panel-count">{countLabel}</p>
 
       {filings.length > 0 && (
         <ul className="filing-list">
@@ -68,7 +69,7 @@ export default function DetailPanel({ selectedDate, filings }: Props) {
                 rel="noopener noreferrer"
                 className="filing-source"
               >
-                View on EDGAR ↗
+                View on EDGAR
               </a>
             </li>
           ))}
