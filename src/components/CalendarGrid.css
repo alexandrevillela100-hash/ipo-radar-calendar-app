@@ -1,0 +1,190 @@
+/*
+ * CalendarGrid — month view, 7-column grid, colour-coded dots per filing.
+ */
+
+.calendar {
+  background: var(--ink-green-soft);
+  border: 1px solid var(--ink-green-line);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+}
+
+.calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.month-label {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 32px;
+  margin: 0;
+  letter-spacing: -0.01em;
+  text-align: center;
+  flex: 1;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.month-nav,
+.today-btn {
+  height: 36px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--ink-green-line);
+  background: transparent;
+  color: var(--bone-soft);
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+  font-family: var(--font-mono);
+}
+
+.month-nav {
+  width: 36px;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.today-btn {
+  padding: 0 var(--space-3);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.month-nav:hover,
+.today-btn:hover {
+  border-color: var(--teal);
+  color: var(--teal);
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.weekday {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--bone-mute);
+  padding: var(--space-2) 0;
+  text-align: center;
+}
+
+.day-cell {
+  aspect-ratio: 1 / 1;
+  min-height: 72px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--bone);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  transition: background 120ms ease, border-color 120ms ease;
+  font-family: inherit;
+  text-align: left;
+}
+
+.day-cell.empty {
+  cursor: default;
+  pointer-events: none;
+  border: none;
+}
+
+.day-cell:not(.empty):hover {
+  border-color: var(--ink-green-line);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.day-cell.today {
+  border-color: var(--teal);
+}
+
+.day-cell.today .day-number {
+  color: var(--teal);
+}
+
+.day-cell.selected {
+  border-color: var(--teal);
+  background: rgba(3, 200, 181, 0.08);
+}
+
+.day-cell.has-filings .day-number {
+  font-weight: 500;
+}
+
+.day-number {
+  font-family: var(--font-display);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  align-items: center;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dot-more {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--bone-mute);
+  margin-left: 2px;
+}
+
+.calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--ink-green-line);
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--bone-mute);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+@media (max-width: 640px) {
+  .day-cell {
+    min-height: 56px;
+    padding: 4px 5px;
+  }
+  .day-number { font-size: 14px; }
+  .month-label { font-size: 24px; }
+  .calendar { padding: var(--space-4); }
+}
