@@ -18,10 +18,11 @@ export default function App() {
         setFilings(data);
         setLoading(false);
       })
-      .catch((err) => {
+      .catch((err: unknown) => {
         console.error("[App] failed to load filings", err);
-        setError(err.message ?? "Failed to load filings");
+        setError(err instanceof Error ? err.message : "Failed to load filings");
         setLoading(false);
+      });
       });
   }, []);
 
