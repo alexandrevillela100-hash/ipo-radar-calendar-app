@@ -1,0 +1,84 @@
+/*
+ * App-level layout — header, main content, footer.
+ * Component-specific styling lives in each component's own .css file.
+ */
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--ink-green-line);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.brand {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 28px;
+  letter-spacing: -0.02em;
+}
+
+.brand-mark.accent {
+  color: var(--teal);
+  margin-left: 6px;
+}
+
+.byline {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--bone-mute);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.app-main {
+  flex: 1;
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-6);
+}
+
+.page-title {
+  font-size: 48px;
+  margin-bottom: var(--space-2);
+}
+
+.page-subtitle {
+  color: var(--bone-soft);
+  margin-top: 0;
+  margin-bottom: var(--space-6);
+  max-width: 680px;
+}
+
+.status {
+  padding: var(--space-5);
+  border: 1px solid var(--ink-green-line);
+  border-radius: var(--radius-md);
+  background: var(--ink-green-soft);
+  color: var(--bone-soft);
+}
+
+.status.error {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.app-footer {
+  padding: var(--space-5) var(--space-6);
+  border-top: 1px solid var(--ink-green-line);
+}
+
+.muted {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--bone-mute);
+}

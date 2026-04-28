@@ -1,0 +1,42 @@
+/*
+ * Velocia design tokens — single source of truth for colours, type, spacing.
+ *
+ * Same palette and font stack as the fact-sheet template and the digest articles,
+ * so visual consistency holds across every IPO Radar surface.
+ */
+
+:root {
+  /* Colour — Velocia palette */
+  --ink-green: #080e10;        /* primary background */
+  --ink-green-soft: #111b1f;   /* slightly raised surfaces */
+  --ink-green-line: #1a262b;   /* borders, dividers, grid lines */
+
+  --bone: #f3efe5;             /* primary text on dark */
+  --bone-soft: #c9c3b6;        /* secondary text */
+  --bone-mute: #8a8478;        /* tertiary / disabled */
+
+  --teal: #03c8b5;             /* S-1, F-1 — initial filings */
+  --gold: #c8a45c;             /* S-1/A, F-1/A — amendments */
+  --green: #59c280;            /* 424B — final prospectus */
+  --red: #d65a5a;              /* RW — withdrawals */
+
+  /* Type — same stack as fact sheet */
+  --font-display: "Cormorant Garamond", "Times New Roman", serif;
+  --font-body: "Barlow", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  --font-mono: "DM Mono", "Menlo", monospace;
+
+  /* Spacing — 4px base */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-8: 48px;
+  --space-10: 64px;
+
+  /* Radii */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+}
