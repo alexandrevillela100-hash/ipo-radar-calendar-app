@@ -153,32 +153,6 @@
   margin-left: 2px;
 }
 
-.calendar-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-4);
-  margin-top: var(--space-5);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--ink-green-line);
-}
-
-.legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--bone-mute);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.legend-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
 @media (max-width: 640px) {
   .day-cell {
     min-height: 56px;
