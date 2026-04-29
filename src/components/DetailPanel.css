@@ -107,6 +107,37 @@
   color: var(--bone-mute);
 }
 
+/*
+ * Action row — primary "View Fact Sheet" button (teal pill, filled) plus
+ * a secondary EDGAR source link. When no Fact Sheet exists, the EDGAR
+ * link stands alone and reads "View on EDGAR".
+ */
+.filing-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.filing-primary-cta {
+  display: inline-block;
+  background: var(--teal);
+  color: var(--ink-green);
+  border-radius: var(--radius-sm);
+  padding: 7px 14px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+  transition: filter 120ms ease;
+}
+
+.filing-primary-cta:hover {
+  filter: brightness(1.08);
+}
+
 .filing-source {
   font-family: var(--font-mono);
   font-size: 11px;
