@@ -32,19 +32,19 @@ interface Props {
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-export default function CalendarGrid({
-  month,
-  onMonthChange,
-  filingsByDate,
-  selectedDate,
-  onSelectDate,
-  onJumpToToday,
-}: Props) {
+export default function CalendarGrid(props: Props) {
+  const month = props.month;
+  const onMonthChange = props.onMonthChange;
+  const filingsByDate = props.filingsByDate;
+  const selectedDate = props.selectedDate;
+  const onSelectDate = props.onSelectDate;
+  const onJumpToToday = props.onJumpToToday;
+
   const today = todayIso();
   const dayCount = daysInMonth(month);
   const offset = firstDayOffset(month);
 
-  // Flat array of cells: leading blanks, then day numbers, then trailing blanks
+  // Flat array of cells: leading blanks, day numbers, trailing blanks
   // to round out the final row. Keeps the grid rectangular.
   const cells: Array<{ iso: string; day: number } | null> = [];
   for (let i = 0; i < offset; i++) cells.push(null);
@@ -56,36 +56,18 @@ export default function CalendarGrid({
   return (
     <section className="calendar">
       <header className="calendar-header">
-        <button
-          type="button"
-          className="month-nav"
-          onClick={() => onMonthChange(prevMonth(month))}
-          aria-label="Previous month"
-        >
-          ‹
-        </button>
+        <button type="button" className="month-nav" onClick={function () { onMonthChange(prevMonth(month)); }} aria-label="Previous month">‹</button>
         <h2 className="month-label">{monthLabel(month)}</h2>
         <div className="header-right">
-          <button type="button" className="today-btn" onClick={onJumpToToday}>
-            Today
-          </button>
-          <button
-            type="button"
-            className="month-nav"
-            onClick={() => onMonthChange(nextMonth(month))}
-            aria-label="Next month"
-          >
-            ›
-          </button>
+          <button type="button" className="today-btn" onClick={onJumpToToday}>Today</button>
+          <button type="button" className="month-nav" onClick={function () { onMonthChange(nextMonth(month)); }} aria-label="Next month">›</button>
         </div>
       </header>
 
       <div className="calendar-grid">
-        {WEEKDAYS.map((w) => (
-          <div key={w} className="weekday">{w}</div>
-        ))}
-        {cells.map((cell, i) => {
-          if (!cell) return <div key={`blank-${i}`} className="day-cell empty" />;
+        {WEEKDAYS.map(function (w) { return <div key={w} className="weekday">{w}</div>; })}
+        {cells.map(function (cell, i) {
+          if (!cell) return <div key={"blank-" + i} className="day-cell empty" />;
           const filings = filingsByDate[cell.iso] || [];
           const isToday = cell.iso === today;
           const isSelected = cell.iso === selectedDate;
@@ -95,48 +77,21 @@ export default function CalendarGrid({
           if (filings.length > 0) cls.push("has-filings");
 
           return (
-            <button
-              key={cell.iso}
-              type="button"
-              className={cls.join(" ")}
-              onClick={() => onSelectDate(cell.iso)}
-            >
+            <button key={cell.iso} type="button" className={cls.join(" ")} onClick={function () { onSelectDate(cell.iso); }}>
               <span className="day-number">{cell.day}</span>
-              {filings.length > 0 && (
+              {filings.length > 0 ? (
                 <div className="dots">
-                  {filings.slice(0, 4).map((f) => (
-                    <span
-                      key={f._id}
-                      className="dot"
-                      style={{ backgroundColor: filingTypeColor(f.filingType) }}
-                      title={`${f.filingType} — ${f.companyName}`}
-                    />
-                  ))}
-                  {filings.length > 4 && (
-                    <span className="dot-more">+{filings.length - 4}</span>
-                  )}
+                  {filings.slice(0, 4).map(function (f) {
+                    const dotStyle = { backgroundColor: filingTypeColor(f.filingType) };
+                    return <span key={f._id} className="dot" style={dotStyle} title={f.filingType + " - " + f.companyName} />;
+                  })}
+                  {filings.length > 4 ? <span className="dot-more">+{filings.length - 4}</span> : null}
                 </div>
-              )}
+              ) : null}
             </button>
           );
         })}
       </div>
-
-      <footer className="calendar-legend">
-        <LegendItem color="var(--teal)" label="S-1 / F-1 (Initial)" />
-        <LegendItem color="var(--gold)" label="S-1/A · F-1/A (Amendment)" />
-        <LegendItem color="var(--green)" label="424B (Final / Pricing)" />
-        <LegendItem color="var(--red)" label="RW (Withdrawal)" />
-      </footer>
     </section>
-  );
-}
-
-function LegendItem({ color, label }: { color: string; label: string }) {
-  return (
-    <span className="legend-item">
-      <span className="legend-dot" style={{ backgroundColor: color }} />
-      {label}
-    </span>
   );
 }
