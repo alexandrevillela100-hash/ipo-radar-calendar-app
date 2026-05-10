@@ -5,6 +5,10 @@
     {
       "source": "/reports/:slug",
       "destination": "/api/reports/:slug"
+    },
+    {
+      "source": "/factsheet/:slug",
+      "destination": "/api/factsheet/:slug"
     }
   ]
 }
