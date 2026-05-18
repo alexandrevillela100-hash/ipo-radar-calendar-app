@@ -59,6 +59,41 @@ export interface Filing {
   accessionNumber: string;
   edgarUrl: string;
   reportSlug?: string;
+
+  /** Linked initiationReport: PDF download URL (Sanity file asset). */
+  pdfReportUrl?: string;
+
+  /** SIC code (4-digit). EDGAR convention. */
+  sicCode?: string;
+
+  /** Offering economics from the initiationReport. */
+  offering?: {
+    sharesOfferedM?: number;
+    priceRange?: string;          // e.g. "$14 – $16"
+    grossProceedsM?: number;
+    impliedValuationM?: number;
+  };
+
+  /** Plain-text bullets — top use-of-proceeds buckets. */
+  useOfProceeds?: string[];
+
+  /** Plain-text bullets — top 3-6 risks. */
+  keyRisks?: string[];
+
+  /** Last 3 fiscal years of summary financials. */
+  financials?: {
+    lastRevenueM?: number;
+    history?: Array<{
+      fy: string;                  // "FY2024"
+      revenueM?: number;
+      grossProfitM?: number;
+      netIncomeM?: number;
+    }>;
+  };
+
+  /** Lead underwriters and comp-set tickers. */
+  leadUnderwriters?: string[];
+  comparables?: string[];
 }
 
 // ───────────────────────────────────────────────────────────────────────
@@ -168,3 +203,128 @@ export function filingTypeLabel(t: FilingType): string {
     default:      return t;
   }
 }
+
+
+// ─── 2. ADD getFilingBySlug(slug) ───────────────────────────────────
+//
+// Paste this function at the bottom of filingsClient.ts, after the
+// existing getRecentFilings() definition.
+
+export async function getFilingBySlug(slug: string): Promise<Filing | null> {
+  // GROQ: match a single filing by its reportSlug or by the
+  // initiationReport slug — covers both linking strategies.
+  const query = `
+    *[
+      _type == "filing"
+      && (reportSlug == $slug || slug.current == $slug)
+    ][0] {
+      _id,
+      companyName,
+      ticker,
+      exchange,
+      industry,
+      sicCode,
+      filingType,
+      filingDate,
+      reportSlug,
+      "heroImageUrl": *[
+        _type == "initiationReport"
+        && defined(^.reportSlug)
+        && slug.current == ^.reportSlug
+        && status == "published"
+      ][0].heroImage.asset->url,
+      "pdfReportUrl": *[
+        _type == "initiationReport"
+        && defined(^.reportSlug)
+        && slug.current == ^.reportSlug
+        && status == "published"
+      ][0].pdfFile.asset->url,
+      "offering": *[
+        _type == "initiationReport"
+        && defined(^.reportSlug)
+        && slug.current == ^.reportSlug
+        && status == "published"
+      ][0].offering,
+      "useOfProceeds": *[
+        _type == "initiationReport"
+        && defined(^.reportSlug)
+        && slug.current == ^.reportSlug
+        && status == "published"
+      ][0].useOfProceeds,
+      "keyRisks": *[
+        _type == "initiationReport"
+        && defined(^.reportSlug)
+        && slug.current == ^.reportSlug
+        && status == "published"
+      ][0].keyRisks,
+      "financials": *[
+        _type == "initiationReport"
+        && defined(^.reportSlug)
+        && slug.current == ^.reportSlug
+        && status == "published"
+      ][0].financials,
+      "leadUnderwriters": *[
+        _type == "initiationReport"
+        && defined(^.reportSlug)
+        && slug.current == ^.reportSlug
+        && status == "published"
+      ][0].leadUnderwriters,
+      "comparables": *[
+        _type == "initiationReport"
+        && defined(^.reportSlug)
+        && slug.current == ^.reportSlug
+        && status == "published"
+      ][0].comparables
+    }
+  `;
+
+  const url =
+    `https://${SANITY_PROJECT_ID}.api.sanity.io/v${SANITY_API_VERSION}/data/query/${SANITY_DATASET}` +
+    `?query=${encodeURIComponent(query)}&%24slug=${encodeURIComponent(`"${slug}"`)}`;
+
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Sanity error ${res.status}`);
+  const { result } = await res.json();
+  return result ?? null;
+}
+
+
+// ─── 3. ADD getAllFilings() ─────────────────────────────────────────
+//
+// Same file, paste below getFilingBySlug. Used by the new /ipos
+// list view.
+
+export async function getAllFilings(): Promise<Filing[]> {
+  const query = `
+    *[_type == "filing"] | order(filingDate desc) {
+      _id,
+      companyName,
+      ticker,
+      exchange,
+      industry,
+      sicCode,
+      filingType,
+      filingDate,
+      reportSlug,
+      "heroImageUrl": *[
+        _type == "initiationReport"
+        && defined(^.reportSlug)
+        && slug.current == ^.reportSlug
+        && status == "published"
+      ][0].heroImage.asset->url
+    }
+  `;
+  const url =
+    `https://${SANITY_PROJECT_ID}.api.sanity.io/v${SANITY_API_VERSION}/data/query/${SANITY_DATASET}` +
+    `?query=${encodeURIComponent(query)}`;
+
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Sanity error ${res.status}`);
+  const { result } = await res.json();
+  return result ?? [];
+}
+
+
+
+
+
