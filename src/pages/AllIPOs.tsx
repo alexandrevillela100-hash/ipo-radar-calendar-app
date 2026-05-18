@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
-import { ArrowLeft, ArrowRight, Search } from "lucide-react";
+import { ArrowRight, Search } from "lucide-react";
+import CalendarNavbar from "@/components/CalendarNavbar";
 import {
   getAllFilings,
   filingTypeColor,
@@ -8,17 +9,14 @@ import {
 } from "@/lib/filingsClient";
 
 /**
- * AllIPOs — flat, sortable, filterable list of every IPO in Sanity.
+ * AllIPOs — v2.
+ *
+ * Changes from v1:
+ *   - Uses CalendarNavbar at top (consistent header across all
+ *     calendar-app pages, easy navigation back to calendar / main site).
+ *   - Removed the standalone "← Home" utility bar.
  *
  * Route: /ipos
- *
- * Design:
- *   - Header with search bar and filing-type filter chips
- *   - Sortable table: Company | Ticker | Filing type | Industry | Date
- *   - Click a row → /fact-sheet/:slug
- *
- * Pulls via getAllFilings() (full collection — fine up to a few hundred
- * filings; switch to paginated GROQ if it grows beyond that).
  */
 
 type SortKey = "filingDate" | "companyName" | "filingType" | "industry";
@@ -48,12 +46,9 @@ export default function AllIPOs() {
         console.error("[AllIPOs] fetch failed:", e);
         if (!cancelled) (setFilings([]), setLoading(false));
       });
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
-  // Apply filters + search + sort
   const rows = useMemo(() => {
     if (!filings) return [];
     const q = search.trim().toLowerCase();
@@ -94,23 +89,11 @@ export default function AllIPOs() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* ── Utility bar ─────────────────────────────────────────── */}
-      <div className="border-b border-border/40 bg-background/95 backdrop-blur sticky top-0 z-10">
-        <div className="container py-4 flex items-center justify-between">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground transition-colors no-underline"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            Home
-          </Link>
-          <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-            All IPOs
-          </div>
-        </div>
-      </div>
+      <CalendarNavbar />
 
-      {/* ── Header ──────────────────────────────────────────────── */}
+      {/* Spacer for fixed nav */}
+      <div className="pt-16" />
+
       <section className="container pt-16 pb-10">
         <div className="vv-eyebrow mb-4">The Pipeline · Full List</div>
         <h1 className="vv-section-title text-[clamp(36px,4vw,60px)] text-foreground mb-3">
@@ -122,10 +105,8 @@ export default function AllIPOs() {
         </p>
       </section>
 
-      {/* ── Filter bar ──────────────────────────────────────────── */}
       <section className="container pb-6">
         <div className="flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
-          {/* Search */}
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
@@ -138,7 +119,6 @@ export default function AllIPOs() {
             />
           </div>
 
-          {/* Filing-type chips */}
           <div className="flex flex-wrap gap-2">
             {FILING_TYPE_OPTIONS.map((opt) => (
               <button
@@ -159,7 +139,6 @@ export default function AllIPOs() {
         </div>
       </section>
 
-      {/* ── Table ───────────────────────────────────────────────── */}
       <section className="container pb-24">
         {loading ? (
           <div className="py-24 text-center font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
@@ -174,44 +153,20 @@ export default function AllIPOs() {
             <table className="w-full text-[14px]">
               <thead className="bg-card/40 border-b border-border/40">
                 <tr>
-                  <SortHeader
-                    label="Company"
-                    active={sortKey === "companyName"}
-                    indicator={sortIndicator("companyName")}
-                    onClick={() => toggleSort("companyName")}
-                  />
+                  <SortHeader label="Company" active={sortKey === "companyName"} indicator={sortIndicator("companyName")} onClick={() => toggleSort("companyName")} />
                   <Th>Ticker</Th>
-                  <SortHeader
-                    label="Filing type"
-                    active={sortKey === "filingType"}
-                    indicator={sortIndicator("filingType")}
-                    onClick={() => toggleSort("filingType")}
-                  />
-                  <SortHeader
-                    label="Industry"
-                    active={sortKey === "industry"}
-                    indicator={sortIndicator("industry")}
-                    onClick={() => toggleSort("industry")}
-                  />
-                  <SortHeader
-                    label="Filing date"
-                    active={sortKey === "filingDate"}
-                    indicator={sortIndicator("filingDate")}
-                    onClick={() => toggleSort("filingDate")}
-                  />
+                  <SortHeader label="Filing type" active={sortKey === "filingType"} indicator={sortIndicator("filingType")} onClick={() => toggleSort("filingType")} />
+                  <SortHeader label="Industry" active={sortKey === "industry"} indicator={sortIndicator("industry")} onClick={() => toggleSort("industry")} />
+                  <SortHeader label="Filing date" active={sortKey === "filingDate"} indicator={sortIndicator("filingDate")} onClick={() => toggleSort("filingDate")} />
                   <Th>{""}</Th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((f) => {
                   const accent = filingTypeColor(f.filingType);
-                  const href = f.reportSlug
+                  const href = (f.heroImageUrl && f.reportSlug)
                     ? `/fact-sheet/${encodeURIComponent(f.reportSlug)}`
                     : null;
-                  const RowEl: React.ElementType = href ? Link : "div";
-                  const rowProps = href
-                    ? { href, className: "contents no-underline" }
-                    : { className: "contents" };
                   return (
                     <tr
                       key={f._id}
@@ -229,9 +184,7 @@ export default function AllIPOs() {
                           f.companyName
                         )}
                       </td>
-                      <td className="py-3.5 px-4 font-mono text-[12px] text-primary">
-                        {f.ticker || "—"}
-                      </td>
+                      <td className="py-3.5 px-4 font-mono text-[12px] text-primary">{f.ticker || "—"}</td>
                       <td className="py-3.5 px-4">
                         <span
                           className="inline-block font-mono text-[9px] uppercase tracking-[0.14em] px-2 py-1"
@@ -245,20 +198,12 @@ export default function AllIPOs() {
                           {f.filingType}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 text-foreground/85">
-                        {f.industry || "—"}
-                      </td>
-                      <td className="py-3.5 px-4 font-mono text-[12px] text-foreground/85">
-                        {f.filingDate || "—"}
-                      </td>
+                      <td className="py-3.5 px-4 text-foreground/85">{f.industry || "—"}</td>
+                      <td className="py-3.5 px-4 font-mono text-[12px] text-foreground/85">{f.filingDate || "—"}</td>
                       <td className="py-3.5 px-4 text-right">
                         {href ? (
-                          <Link
-                            href={href}
-                            className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.16em] text-primary no-underline"
-                          >
-                            View
-                            <ArrowRight className="w-3 h-3" />
+                          <Link href={href} className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.16em] text-primary no-underline">
+                            View <ArrowRight className="w-3 h-3" />
                           </Link>
                         ) : (
                           <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground/60">
@@ -293,17 +238,7 @@ function Th({ children }: { children: React.ReactNode }) {
   );
 }
 
-function SortHeader({
-  label,
-  active,
-  indicator,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  indicator: string;
-  onClick: () => void;
-}) {
+function SortHeader({ label, active, indicator, onClick }: { label: string; active: boolean; indicator: string; onClick: () => void }) {
   return (
     <th className="text-left py-3 px-4">
       <button

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useRoute } from "wouter";
 import {
-  ArrowLeft,
   Building2,
   Calendar,
   DollarSign,
@@ -12,40 +11,23 @@ import {
   AlertTriangle,
   ExternalLink,
 } from "lucide-react";
-import { getFilingBySlug, filingTypeColor, type Filing } from "@/lib/filingsClient";
+import CalendarNavbar from "@/components/CalendarNavbar";
+import {
+  getFilingBySlug,
+  filingTypeColor,
+  type Filing,
+} from "@/lib/filingsClient";
 
 /**
- * FactSheet — single-page "one-pager" for a single IPO filing.
+ * FactSheet — v2.
  *
- * Route:  /fact-sheet/:slug
+ * Changes from v1:
+ *   - Uses CalendarNavbar at top (consistent header across all
+ *     calendar-app pages, easy to navigate back).
+ *   - Removed the standalone "← Home" utility bar.
  *
- * Pulls filing + linked initiationReport from Sanity via
- * getFilingBySlug(slug). Renders a dense, professional one-pager:
- *
- *   ┌─────────────────────────────────────────────────┐
- *   │  HERO (image + company + ticker + filing type)  │
- *   ├─────────────────────────────────────────────────┤
- *   │  QUICK FACTS GRID (industry, exchange, etc.)    │
- *   ├─────────────────────────────────────────────────┤
- *   │  THE OFFERING — shares, price range, proceeds   │
- *   ├─────────────────────────────────────────────────┤
- *   │  USE OF PROCEEDS                                │
- *   ├─────────────────────────────────────────────────┤
- *   │  KEY RISKS                                      │
- *   ├─────────────────────────────────────────────────┤
- *   │  FINANCIAL SNAPSHOT (3-yr revenue / GP / NI)    │
- *   ├─────────────────────────────────────────────────┤
- *   │  UNDERWRITERS / COMPARABLES                     │
- *   ├─────────────────────────────────────────────────┤
- *   │  CTA BAR: Download PDF  |  Read full report     │
- *   └─────────────────────────────────────────────────┘
- *
- * All sections gracefully hide when their data is absent from Sanity,
- * so this component works for filings with full reports AND for bare
- * filings that only have the EDGAR poller's metadata.
+ * Route: /fact-sheet/:slug
  */
-
-// ─── Helpers ─────────────────────────────────────────────────────────
 
 function shortDate(iso?: string): string {
   if (!iso) return "—";
@@ -64,8 +46,6 @@ function formatMoney(usdMillions?: number | null): string {
   }
   return `$${usdMillions.toFixed(1)}M`;
 }
-
-// ─── Component ───────────────────────────────────────────────────────
 
 export default function FactSheet() {
   const [, params] = useRoute<{ slug: string }>("/fact-sheet/:slug");
@@ -90,32 +70,36 @@ export default function FactSheet() {
         setErr(String(e?.message ?? e));
         setLoading(false);
       });
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [slug]);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-muted-foreground">
-        <span className="font-mono text-[11px] uppercase tracking-[0.18em]">
-          Loading fact sheet…
-        </span>
-      </div>
+      <>
+        <CalendarNavbar />
+        <div className="min-h-screen flex items-center justify-center text-muted-foreground pt-16">
+          <span className="font-mono text-[11px] uppercase tracking-[0.18em]">
+            Loading fact sheet…
+          </span>
+        </div>
+      </>
     );
   }
 
   if (err || !filing) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 text-center px-6">
-        <h1 className="vv-section-title text-3xl text-foreground">Fact sheet not found</h1>
-        <p className="text-muted-foreground text-sm max-w-md">
-          We couldn't locate a filing with slug <code className="font-mono">{slug}</code>.
-        </p>
-        <Link href="/" className="font-mono text-[11px] uppercase tracking-[0.16em] text-primary">
-          ← Back to home
-        </Link>
-      </div>
+      <>
+        <CalendarNavbar />
+        <div className="min-h-screen flex flex-col items-center justify-center gap-4 text-center px-6 pt-16">
+          <h1 className="vv-section-title text-3xl text-foreground">Fact sheet not found</h1>
+          <p className="text-muted-foreground text-sm max-w-md">
+            We couldn't locate a filing with slug <code className="font-mono">{slug}</code>.
+          </p>
+          <Link href="/" className="font-mono text-[11px] uppercase tracking-[0.16em] text-primary">
+            ← Back to calendar
+          </Link>
+        </div>
+      </>
     );
   }
 
@@ -123,10 +107,6 @@ export default function FactSheet() {
   const hero = filing.heroImageUrl;
   const offering = filing.offering;
   const financials = filing.financials;
-
-  // ─── PDF link resolution ───────────────────────────────────────────
-  // Prefer a directly-uploaded PDF in Sanity; otherwise fall back to
-  // null and the button hides itself.
   const pdfUrl = filing.pdfReportUrl ?? null;
   const fullReportHref = filing.reportSlug
     ? `/reports/${encodeURIComponent(filing.reportSlug)}`
@@ -134,21 +114,10 @@ export default function FactSheet() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* ── Top utility bar ─────────────────────────────────────── */}
-      <div className="border-b border-border/40 bg-background/95 backdrop-blur sticky top-0 z-10">
-        <div className="container py-4 flex items-center justify-between">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground transition-colors no-underline"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            Home
-          </Link>
-          <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-            Fact Sheet · {filing.ticker || "—"}
-          </div>
-        </div>
-      </div>
+      <CalendarNavbar />
+
+      {/* Spacer for fixed nav */}
+      <div className="pt-16" />
 
       {/* ── Hero ────────────────────────────────────────────────── */}
       <section className="relative">
@@ -164,7 +133,6 @@ export default function FactSheet() {
         </div>
 
         <div className="container -mt-32 relative z-[5] pb-12">
-          {/* Filing-type chip */}
           <div
             className="inline-block font-mono text-[10px] tracking-[0.18em] uppercase px-3 py-1.5 mb-5 backdrop-blur-sm"
             style={{
@@ -196,29 +164,13 @@ export default function FactSheet() {
         </div>
       </section>
 
-      {/* ── Quick facts grid ────────────────────────────────────── */}
+      {/* ── Quick facts ─────────────────────────────────────────── */}
       <section className="border-y border-border/40 bg-card/40">
         <div className="container py-10 grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-6">
-          <QuickFact
-            icon={<Building2 className="w-3.5 h-3.5" />}
-            label="Exchange"
-            value={filing.exchange || "—"}
-          />
-          <QuickFact
-            icon={<Calendar className="w-3.5 h-3.5" />}
-            label="Filed"
-            value={shortDate(filing.filingDate)}
-          />
-          <QuickFact
-            icon={<DollarSign className="w-3.5 h-3.5" />}
-            label="Gross proceeds"
-            value={formatMoney(offering?.grossProceedsM)}
-          />
-          <QuickFact
-            icon={<TrendingUp className="w-3.5 h-3.5" />}
-            label="Last revenue"
-            value={formatMoney(financials?.lastRevenueM)}
-          />
+          <QuickFact icon={<Building2 className="w-3.5 h-3.5" />} label="Exchange" value={filing.exchange || "—"} />
+          <QuickFact icon={<Calendar className="w-3.5 h-3.5" />} label="Filed" value={shortDate(filing.filingDate)} />
+          <QuickFact icon={<DollarSign className="w-3.5 h-3.5" />} label="Gross proceeds" value={formatMoney(offering?.grossProceedsM)} />
+          <QuickFact icon={<TrendingUp className="w-3.5 h-3.5" />} label="Last revenue" value={formatMoney(financials?.lastRevenueM)} />
         </div>
       </section>
 
@@ -227,26 +179,11 @@ export default function FactSheet() {
         <Section eyebrow="The Offering" title="Deal terms.">
           <div className="grid md:grid-cols-2 gap-x-12 gap-y-4">
             {offering.sharesOfferedM != null ? (
-              <DataRow
-                label="Shares offered"
-                value={`${offering.sharesOfferedM.toLocaleString()}M`}
-              />
+              <DataRow label="Shares offered" value={`${offering.sharesOfferedM.toLocaleString()}M`} />
             ) : null}
-            {offering.priceRange ? (
-              <DataRow label="Price range" value={offering.priceRange} />
-            ) : null}
-            {offering.grossProceedsM != null ? (
-              <DataRow
-                label="Gross proceeds"
-                value={formatMoney(offering.grossProceedsM)}
-              />
-            ) : null}
-            {offering.impliedValuationM != null ? (
-              <DataRow
-                label="Implied valuation"
-                value={formatMoney(offering.impliedValuationM)}
-              />
-            ) : null}
+            {offering.priceRange ? <DataRow label="Price range" value={offering.priceRange} /> : null}
+            {offering.grossProceedsM != null ? <DataRow label="Gross proceeds" value={formatMoney(offering.grossProceedsM)} /> : null}
+            {offering.impliedValuationM != null ? <DataRow label="Implied valuation" value={formatMoney(offering.impliedValuationM)} /> : null}
           </div>
         </Section>
       ) : null}
@@ -256,10 +193,7 @@ export default function FactSheet() {
         <Section eyebrow="Use of Proceeds" title="Where the money goes.">
           <ul className="space-y-3">
             {filing.useOfProceeds.map((line, i) => (
-              <li
-                key={i}
-                className="flex gap-3 text-[15px] text-foreground/85 leading-[1.7]"
-              >
+              <li key={i} className="flex gap-3 text-[15px] text-foreground/85 leading-[1.7]">
                 <span className="mt-2 w-1 h-1 rounded-full bg-primary shrink-0" />
                 <span>{line}</span>
               </li>
@@ -273,16 +207,10 @@ export default function FactSheet() {
         <Section eyebrow="Key Risks" title="What to watch.">
           <div className="grid md:grid-cols-2 gap-4">
             {filing.keyRisks.slice(0, 6).map((risk, i) => (
-              <div
-                key={i}
-                className="border border-border/60 bg-card/30 p-4"
-                style={{ borderRadius: "4px" }}
-              >
+              <div key={i} className="border border-border/60 bg-card/30 p-4" style={{ borderRadius: "4px" }}>
                 <div className="flex items-start gap-3">
                   <AlertTriangle className="w-4 h-4 text-[#c8a45c] mt-0.5 shrink-0" />
-                  <p className="text-[14px] text-foreground/85 leading-[1.65]">
-                    {risk}
-                  </p>
+                  <p className="text-[14px] text-foreground/85 leading-[1.65]">{risk}</p>
                 </div>
               </div>
             ))}
@@ -290,40 +218,26 @@ export default function FactSheet() {
         </Section>
       ) : null}
 
-      {/* ── Financial snapshot ──────────────────────────────────── */}
+      {/* ── Financials ──────────────────────────────────────────── */}
       {financials?.history && financials.history.length > 0 ? (
         <Section eyebrow="Financial Snapshot" title="Last 3 fiscal years.">
           <div className="overflow-x-auto">
             <table className="w-full text-[14px] font-mono">
               <thead>
                 <tr className="border-b border-border/60">
-                  <th className="text-left py-3 pr-6 text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-normal">
-                    Year
-                  </th>
-                  <th className="text-right py-3 px-6 text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-normal">
-                    Revenue
-                  </th>
-                  <th className="text-right py-3 px-6 text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-normal">
-                    Gross profit
-                  </th>
-                  <th className="text-right py-3 pl-6 text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-normal">
-                    Net income
-                  </th>
+                  <th className="text-left py-3 pr-6 text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-normal">Year</th>
+                  <th className="text-right py-3 px-6 text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-normal">Revenue</th>
+                  <th className="text-right py-3 px-6 text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-normal">Gross profit</th>
+                  <th className="text-right py-3 pl-6 text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-normal">Net income</th>
                 </tr>
               </thead>
               <tbody>
                 {financials.history.map((row, i) => (
                   <tr key={i} className="border-b border-border/30">
                     <td className="py-3 pr-6 text-foreground">{row.fy}</td>
-                    <td className="py-3 px-6 text-right text-foreground/90">
-                      {formatMoney(row.revenueM)}
-                    </td>
-                    <td className="py-3 px-6 text-right text-foreground/90">
-                      {formatMoney(row.grossProfitM)}
-                    </td>
-                    <td className="py-3 pl-6 text-right text-foreground/90">
-                      {formatMoney(row.netIncomeM)}
-                    </td>
+                    <td className="py-3 px-6 text-right text-foreground/90">{formatMoney(row.revenueM)}</td>
+                    <td className="py-3 px-6 text-right text-foreground/90">{formatMoney(row.grossProfitM)}</td>
+                    <td className="py-3 pl-6 text-right text-foreground/90">{formatMoney(row.netIncomeM)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -340,14 +254,11 @@ export default function FactSheet() {
             {filing.leadUnderwriters && filing.leadUnderwriters.length > 0 ? (
               <div>
                 <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-3 flex items-center gap-2">
-                  <Users className="w-3 h-3" />
-                  Lead underwriters
+                  <Users className="w-3 h-3" /> Lead underwriters
                 </div>
                 <ul className="space-y-1.5">
                   {filing.leadUnderwriters.map((uw, i) => (
-                    <li key={i} className="text-[15px] text-foreground/85">
-                      {uw}
-                    </li>
+                    <li key={i} className="text-[15px] text-foreground/85">{uw}</li>
                   ))}
                 </ul>
               </div>
@@ -355,14 +266,11 @@ export default function FactSheet() {
             {filing.comparables && filing.comparables.length > 0 ? (
               <div>
                 <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-3 flex items-center gap-2">
-                  <FileText className="w-3 h-3" />
-                  Comparable companies
+                  <FileText className="w-3 h-3" /> Comparable companies
                 </div>
                 <ul className="space-y-1.5">
                   {filing.comparables.map((c, i) => (
-                    <li key={i} className="text-[15px] text-foreground/85">
-                      {c}
-                    </li>
+                    <li key={i} className="text-[15px] text-foreground/85">{c}</li>
                   ))}
                 </ul>
               </div>
@@ -389,8 +297,7 @@ export default function FactSheet() {
                 className="inline-flex items-center gap-2 px-5 py-3 bg-primary text-primary-foreground font-mono text-[10px] uppercase tracking-[0.18em] no-underline hover:opacity-90 transition-opacity"
                 style={{ borderRadius: "2px" }}
               >
-                <Download className="w-3.5 h-3.5" />
-                Download PDF
+                <Download className="w-3.5 h-3.5" /> Download PDF
               </a>
             ) : null}
             {fullReportHref ? (
@@ -399,8 +306,7 @@ export default function FactSheet() {
                 className="inline-flex items-center gap-2 px-5 py-3 border border-border bg-transparent text-foreground font-mono text-[10px] uppercase tracking-[0.18em] no-underline hover:bg-card transition-colors"
                 style={{ borderRadius: "2px" }}
               >
-                Read full report
-                <ExternalLink className="w-3.5 h-3.5" />
+                Read full report <ExternalLink className="w-3.5 h-3.5" />
               </Link>
             ) : null}
           </div>
@@ -414,42 +320,21 @@ export default function FactSheet() {
   );
 }
 
-// ─── Small presentational helpers ────────────────────────────────────
-
-function Section({
-  eyebrow,
-  title,
-  children,
-}: {
-  eyebrow: string;
-  title: string;
-  children: React.ReactNode;
-}) {
+function Section({ eyebrow, title, children }: { eyebrow: string; title: string; children: React.ReactNode }) {
   return (
     <section className="container py-14">
       <div className="vv-eyebrow mb-3">{eyebrow}</div>
-      <h2 className="vv-section-title text-[clamp(24px,2.4vw,36px)] text-foreground mb-8">
-        {title}
-      </h2>
+      <h2 className="vv-section-title text-[clamp(24px,2.4vw,36px)] text-foreground mb-8">{title}</h2>
       {children}
     </section>
   );
 }
 
-function QuickFact({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-}) {
+function QuickFact({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
     <div>
       <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground mb-2">
-        {icon}
-        {label}
+        {icon} {label}
       </div>
       <div className="text-[18px] text-foreground font-light">{value}</div>
     </div>
@@ -459,9 +344,7 @@ function QuickFact({
 function DataRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between border-b border-border/30 py-2.5">
-      <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-        {label}
-      </span>
+      <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">{label}</span>
       <span className="text-[16px] text-foreground/95 font-light">{value}</span>
     </div>
   );
