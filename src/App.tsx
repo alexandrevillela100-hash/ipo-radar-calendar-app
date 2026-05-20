@@ -1,9 +1,8 @@
 import { Route, Switch } from "wouter";
 import CalendarNavbar from "@/components/CalendarNavbar";
 
-// Existing pages
+// Pages currently in the repo
 import Calendar from "@/pages/Calendar";
-import Report from "@/pages/Report";
 import FactSheet from "@/pages/FactSheet";
 import AllIPOs from "@/pages/AllIPOs";
 
@@ -11,15 +10,17 @@ import AllIPOs from "@/pages/AllIPOs";
  * IPO Radar calendar-app router.
  *
  * CalendarNavbar is rendered at the App level (outside <Switch>) so
- * it shows on EVERY page automatically — calendar, fact sheet,
- * all IPOs, report viewer. No page file needs to import or render
- * it themselves.
+ * it shows on EVERY page automatically.
  *
  * Routes:
- *   /                    Calendar grid (your existing Manus-built page)
- *   /reports/:slug       Full 30-page initiation report
+ *   /                    Calendar grid (home)
  *   /fact-sheet/:slug    One-pager fact sheet
  *   /ipos                Sortable list of every filing
+ *
+ * NOTE: /reports/:slug was previously routed to a Report.tsx page,
+ * but that file doesn't currently exist in src/pages/. The route is
+ * removed for now so the build succeeds. When you ship Report.tsx,
+ * re-add the import and route block.
  */
 
 export default function App() {
@@ -33,10 +34,6 @@ export default function App() {
 
       <Switch>
         <Route path="/" component={Calendar} />
-
-        <Route path="/reports/:slug">
-          <Report />
-        </Route>
 
         <Route path="/fact-sheet/:slug">
           <FactSheet />
