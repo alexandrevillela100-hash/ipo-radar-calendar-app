@@ -1,28 +1,22 @@
 // ============================================================================
 //  filingsClient.ts — drop-in replacement
 //
-//  Calendar-app's Sanity client. Replaces the existing
-//  src/lib/filingsClient.ts in one go.
+//  Save as:  calendar-app/src/lib/filingsClient.ts (overwrite existing)
 //
-//  What this file provides:
-//    - Typed interface for a Filing document
-//    - GROQ queries that JOIN filing → initiationReport for hero image,
-//      PDF URL, offering, risks, financials, underwriters, etc.
-//    - getRecentFilings(limit)  — used by FeaturedIPOs and Calendar
-//    - getFilingBySlug(slug)    — used by FactSheet
-//    - getAllFilings()          — used by AllIPOs
-//    - filingTypeColor(type)    — accent color helper for badges
+//  Exports:
+//    - Filing interface (rich — includes joined initiationReport fields)
+//    - FilingType / FilingStatus type unions
+//    - filingsClient (Sanity client instance)
+//    - getRecentFilings(limit) — used by FeaturedIPOs and the calendar
+//    - getFilingBySlug(slug)   — used by FactSheet
+//    - getAllFilings()         — used by AllIPOs and the calendar grid
+//    - filingTypeColor(type)   — accent color helper for badges/chips
+//    - filingTypeLabel(type)   — human-readable label (used by DetailPanel)
 //
 //  Required environment variables (Vercel project settings):
-//    VITE_SANITY_PROJECT_ID   (e.g. "abc12345")
-//    VITE_SANITY_DATASET      (e.g. "production")
-//    VITE_SANITY_API_VERSION  (e.g. "2024-10-01")
-//
-//  Notes for landing-page repo:
-//    Same file structure works for the landing-page repo's
-//    filingsClient.ts. The Filing interface and getRecentFilings()
-//    are the parts the landing page actually uses; the rest is
-//    harmless on the landing page.
+//    VITE_SANITY_PROJECT_ID
+//    VITE_SANITY_DATASET       (defaults to "production")
+//    VITE_SANITY_API_VERSION   (defaults to "2024-10-01")
 // ============================================================================
 
 import { createClient, type SanityClient } from "@sanity/client";
@@ -114,7 +108,7 @@ export interface Filing {
 // The sub-queries match a published `initiationReport` whose slug
 // equals the filing's `reportSlug`. Each pulls one field. Filings
 // without a matching report get `null` for every joined field —
-// which is fine; consumers gracefully hide empty sections.
+// consumers gracefully hide empty sections.
 const PROJECTION = /* groq */ `
   _id,
   companyName,
@@ -183,7 +177,7 @@ const PROJECTION = /* groq */ `
 
 /**
  * Most recent N filings, ordered by filingDate desc.
- * Used by the landing page's FeaturedIPOs grid and the calendar.
+ * Used by the landing page's FeaturedIPOs grid.
  */
 export async function getRecentFilings(limit = 30): Promise<Filing[]> {
   const query = `
@@ -214,9 +208,8 @@ export async function getFilingBySlug(
 }
 
 /**
- * Every filing in the dataset. Used by the AllIPOs list page.
- * Fine up to a few hundred docs; switch to paginated GROQ if it
- * grows beyond that.
+ * Every filing in the dataset, ordered by filingDate desc.
+ * Used by AllIPOs and the calendar homepage.
  */
 export async function getAllFilings(): Promise<Filing[]> {
   const query = `
@@ -251,5 +244,36 @@ export function filingTypeColor(type: FilingType): string {
       return "#d86060"; // red
     default:
       return "#8b9099"; // muted gray
+  }
+}
+
+/**
+ * Human-readable label for a filing type. Used by DetailPanel.tsx
+ * (and any other component that wants a friendlier name than the
+ * raw form type).
+ *
+ *   "S-1"   → "Initial Registration"
+ *   "S-1/A" → "Amendment"
+ *   "F-1"   → "Foreign Registration"
+ *   "F-1/A" → "Foreign Amendment"
+ *   "424B"  → "Pricing"
+ *   "RW"    → "Withdrawn"
+ */
+export function filingTypeLabel(type: FilingType): string {
+  switch (type) {
+    case "S-1":
+      return "Initial Registration";
+    case "S-1/A":
+      return "Amendment";
+    case "F-1":
+      return "Foreign Registration";
+    case "F-1/A":
+      return "Foreign Amendment";
+    case "424B":
+      return "Pricing";
+    case "RW":
+      return "Withdrawn";
+    default:
+      return type;
   }
 }
