@@ -11,7 +11,7 @@ import {
   AlertTriangle,
   ExternalLink,
 } from "lucide-react";
-import CalendarNavbar from "@/components/CalendarNavbar";
+import FactSheetChat from "@/components/FactSheetChat";
 import {
   getFilingBySlug,
   filingTypeColor,
@@ -19,12 +19,13 @@ import {
 } from "@/lib/filingsClient";
 
 /**
- * FactSheet — v2.
+ * FactSheet — v3.
  *
- * Changes from v1:
- *   - Uses CalendarNavbar at top (consistent header across all
- *     calendar-app pages, easy to navigate back).
- *   - Removed the standalone "← Home" utility bar.
+ * Changes from v2:
+ *   - CalendarNavbar removed from this page (App.tsx now renders it
+ *     once at the App level for every route — no more duplication).
+ *   - Added <FactSheetChat /> at the bottom of the page so users can
+ *     ask Claude questions about the filing.
  *
  * Route: /fact-sheet/:slug
  */
@@ -75,31 +76,25 @@ export default function FactSheet() {
 
   if (loading) {
     return (
-      <>
-        <CalendarNavbar />
-        <div className="min-h-screen flex items-center justify-center text-muted-foreground pt-16">
-          <span className="font-mono text-[11px] uppercase tracking-[0.18em]">
-            Loading fact sheet…
-          </span>
-        </div>
-      </>
+      <div className="min-h-[60vh] flex items-center justify-center text-muted-foreground">
+        <span className="font-mono text-[11px] uppercase tracking-[0.18em]">
+          Loading fact sheet…
+        </span>
+      </div>
     );
   }
 
   if (err || !filing) {
     return (
-      <>
-        <CalendarNavbar />
-        <div className="min-h-screen flex flex-col items-center justify-center gap-4 text-center px-6 pt-16">
-          <h1 className="vv-section-title text-3xl text-foreground">Fact sheet not found</h1>
-          <p className="text-muted-foreground text-sm max-w-md">
-            We couldn't locate a filing with slug <code className="font-mono">{slug}</code>.
-          </p>
-          <Link href="/" className="font-mono text-[11px] uppercase tracking-[0.16em] text-primary">
-            ← Back to calendar
-          </Link>
-        </div>
-      </>
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4 text-center px-6">
+        <h1 className="vv-section-title text-3xl text-foreground">Fact sheet not found</h1>
+        <p className="text-muted-foreground text-sm max-w-md">
+          We couldn't locate a filing with slug <code className="font-mono">{slug}</code>.
+        </p>
+        <Link href="/" className="font-mono text-[11px] uppercase tracking-[0.16em] text-primary">
+          ← Back to calendar
+        </Link>
+      </div>
     );
   }
 
@@ -114,11 +109,6 @@ export default function FactSheet() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <CalendarNavbar />
-
-      {/* Spacer for fixed nav */}
-      <div className="pt-16" />
-
       {/* ── Hero ────────────────────────────────────────────────── */}
       <section className="relative">
         <div className="relative h-[42vh] min-h-[320px] max-h-[480px] overflow-hidden bg-gradient-to-br from-primary/15 to-card">
@@ -313,6 +303,10 @@ export default function FactSheet() {
         </div>
       </section>
 
+      {/* ── Analyst chat (NEW) ──────────────────────────────────── */}
+      <FactSheetChat filing={filing} />
+
+      {/* ── Footer ──────────────────────────────────────────────── */}
       <div className="container py-12 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground/60">
         Source: SEC EDGAR · IPO Radar by Velocia Ventures
       </div>
