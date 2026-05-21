@@ -1,23 +1,68 @@
+import type { CSSProperties } from "react";
 import { Radar, ExternalLink } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 /**
- * CalendarNavbar — top navigation for the calendar-app.
+ * CalendarNavbar v2 — top nav for the calendar-app.
  *
- * Mirrors the landing-page Navbar in style, but with calendar-app
- * routes plus a "Main site" link back to the landing page.
+ * Save as:  calendar-app/src/components/CalendarNavbar.tsx (overwrite)
  *
- * Save as:  calendar-app/src/components/CalendarNavbar.tsx
- *
- * Use:  paste <CalendarNavbar /> as the FIRST element inside the
- *       return ( ... ) block of each page (Calendar.tsx, AllIPOs.tsx,
- *       FactSheet.tsx, etc.). The included `pt-16` spacer in each
- *       page accounts for the fixed-position nav.
+ * Uses inline styles (no Tailwind dependency) so it renders correctly
+ * in the calendar-app which doesn't have Tailwind configured.
  */
 
-// If your landing page is on a different domain (custom domain, etc.),
-// update this constant.
 const LANDING_PAGE_URL = "https://ipo-radar-webp.vercel.app";
+
+const navStyle: CSSProperties = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  zIndex: 50,
+  borderBottom: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(10, 13, 16, 0.85)",
+  backdropFilter: "blur(8px)",
+  WebkitBackdropFilter: "blur(8px)",
+};
+
+const containerStyle: CSSProperties = {
+  maxWidth: "1280px",
+  margin: "0 auto",
+  padding: "0 32px",
+  height: "64px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+};
+
+const logoStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  textDecoration: "none",
+  color: "inherit",
+};
+
+const navItemsStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "32px",
+};
+
+function linkStyle(active: boolean): CSSProperties {
+  return {
+    fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+    fontSize: "14px",
+    textDecoration: "none",
+    color: active ? "#03c8b5" : "rgba(228, 230, 232, 0.7)",
+    fontWeight: active ? 600 : 400,
+    transition: "color 0.15s ease",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "6px",
+    cursor: "pointer",
+  };
+}
 
 export default function CalendarNavbar() {
   const [location] = useLocation();
@@ -27,48 +72,42 @@ export default function CalendarNavbar() {
     return location.startsWith(path);
   };
 
-  const linkClass = (path: string) =>
-    `transition-colors text-sm no-underline ${
-      isActive(path)
-        ? "text-primary font-semibold"
-        : "text-muted-foreground hover:text-foreground"
-    }`;
-
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-md">
-      <div className="container">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo — clicks back to calendar home */}
-          <Link href="/" className="flex items-center gap-2 no-underline">
-            <Radar className="w-5 h-5 text-primary" />
-            <span className="text-base font-bold text-foreground">
-              IPO Radar <span className="text-primary">AI</span>
-            </span>
+    <nav style={navStyle}>
+      <div style={containerStyle}>
+        {/* Logo */}
+        <Link href="/" style={logoStyle}>
+          <Radar style={{ width: "20px", height: "20px", color: "#03c8b5" }} />
+          <span style={{ fontSize: "16px", fontWeight: 700, color: "#e4e6e8" }}>
+            IPO Radar{" "}
+            <span style={{ color: "#03c8b5", fontWeight: 600 }}>AI</span>
+          </span>
+        </Link>
+
+        {/* Nav links */}
+        <div style={navItemsStyle}>
+          <Link href="/" style={linkStyle(isActive("/"))}>
+            Calendar
           </Link>
-
-          {/* Nav links */}
-          <div className="hidden md:flex items-center gap-7">
-            <Link href="/" className={linkClass("/")}>
-              Calendar
-            </Link>
-            <Link href="/ipos" className={linkClass("/ipos")}>
-              All IPOs
-            </Link>
-            <a
-              href={LANDING_PAGE_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="transition-colors text-sm text-muted-foreground hover:text-foreground no-underline inline-flex items-center gap-1.5"
-            >
-              Main site
-              <ExternalLink className="w-3 h-3 opacity-70" />
-            </a>
-          </div>
-
-          {/* Right-side spacer (kept for visual balance with the
-              landing-page nav, which has a Sign in button here) */}
-          <div className="w-[80px]" aria-hidden="true" />
+          <Link href="/ipos" style={linkStyle(isActive("/ipos"))}>
+            All IPOs
+          </Link>
+          <a
+            href={LANDING_PAGE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={linkStyle(false)}
+          >
+            Main site
+            <ExternalLink
+              style={{ width: "12px", height: "12px", opacity: 0.65 }}
+            />
+          </a>
         </div>
+
+        {/* Right-side spacer (kept for visual balance with the
+            landing-page nav which has a Sign in button here). */}
+        <div style={{ width: "100px" }} aria-hidden="true" />
       </div>
     </nav>
   );
