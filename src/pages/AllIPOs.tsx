@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import type { CSSProperties } from "react";
 import { Link } from "wouter";
 import { ArrowRight, Search } from "lucide-react";
-import CalendarNavbar from "@/components/CalendarNavbar";
 import {
   getAllFilings,
   filingTypeColor,
@@ -9,14 +9,18 @@ import {
 } from "@/lib/filingsClient";
 
 /**
- * AllIPOs — v2.
+ * AllIPOs — v3.
  *
- * Changes from v1:
- *   - Uses CalendarNavbar at top (consistent header across all
- *     calendar-app pages, easy navigation back to calendar / main site).
- *   - Removed the standalone "← Home" utility bar.
+ * Save as:  calendar-app/src/pages/AllIPOs.tsx (overwrite)
  *
- * Route: /ipos
+ * Changes from v2:
+ *   - Inline styles (no Tailwind dependency, since the calendar-app
+ *     doesn't have Tailwind configured).
+ *   - Row link condition loosened: any filing with reportSlug becomes
+ *     clickable to /fact-sheet/:slug, regardless of whether an
+ *     InitiationReport has been published yet. The fact sheet page
+ *     itself renders a minimal version if the report isn't ready.
+ *   - CalendarNavbar removed from this file — rendered at App level.
  */
 
 type SortKey = "filingDate" | "companyName" | "filingType" | "industry";
@@ -30,6 +34,145 @@ const FILING_TYPE_OPTIONS = [
   { value: "F-1/A", label: "F-1/A" },
 ];
 
+// ─── Inline styles ───────────────────────────────────────────────────
+
+const pageStyle: CSSProperties = {
+  minHeight: "100vh",
+  background: "#0a0d10",
+  color: "#e4e6e8",
+  fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+};
+
+const containerStyle: CSSProperties = {
+  maxWidth: "1280px",
+  margin: "0 auto",
+  padding: "0 32px",
+};
+
+const eyebrowStyle: CSSProperties = {
+  fontFamily: '"DM Mono", monospace',
+  fontSize: "10px",
+  textTransform: "uppercase",
+  letterSpacing: "0.18em",
+  color: "#03c8b5",
+  marginBottom: "16px",
+};
+
+const titleStyle: CSSProperties = {
+  fontFamily: '"Cormorant Garamond", serif',
+  fontWeight: 400,
+  fontSize: "clamp(36px, 4.5vw, 60px)",
+  lineHeight: 1.05,
+  letterSpacing: "-0.01em",
+  margin: "0 0 12px 0",
+  color: "#e4e6e8",
+};
+
+const subtitleStyle: CSSProperties = {
+  fontSize: "15px",
+  color: "rgba(228,230,232,0.6)",
+  maxWidth: "640px",
+  fontWeight: 300,
+  lineHeight: 1.75,
+  margin: 0,
+};
+
+const filterRowStyle: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "16px",
+  alignItems: "center",
+  justifyContent: "space-between",
+  paddingBottom: "20px",
+};
+
+const searchWrapStyle: CSSProperties = {
+  position: "relative",
+  flex: "1 1 280px",
+  maxWidth: "420px",
+};
+
+const searchInputStyle: CSSProperties = {
+  width: "100%",
+  padding: "10px 14px 10px 38px",
+  background: "#131820",
+  color: "#e4e6e8",
+  border: "1px solid rgba(255,255,255,0.1)",
+  fontSize: "14px",
+  fontWeight: 300,
+  outline: "none",
+  borderRadius: "2px",
+};
+
+const chipsRowStyle: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "8px",
+};
+
+function chipStyle(active: boolean): CSSProperties {
+  return {
+    padding: "8px 14px",
+    fontFamily: '"DM Mono", monospace',
+    fontSize: "10px",
+    textTransform: "uppercase",
+    letterSpacing: "0.16em",
+    border: `1px solid ${active ? "#03c8b5" : "rgba(255,255,255,0.15)"}`,
+    background: active ? "#03c8b5" : "transparent",
+    color: active ? "#001512" : "rgba(228,230,232,0.7)",
+    borderRadius: "2px",
+    cursor: "pointer",
+    transition: "all 0.15s",
+  };
+}
+
+const tableWrapStyle: CSSProperties = {
+  overflowX: "auto",
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: "4px",
+};
+
+const tableStyle: CSSProperties = {
+  width: "100%",
+  borderCollapse: "collapse",
+  fontSize: "14px",
+};
+
+const thStyle: CSSProperties = {
+  textAlign: "left",
+  padding: "14px 16px",
+  fontFamily: '"DM Mono", monospace',
+  fontSize: "10px",
+  textTransform: "uppercase",
+  letterSpacing: "0.18em",
+  color: "rgba(228,230,232,0.55)",
+  fontWeight: 400,
+  background: "rgba(19,24,32,0.5)",
+  borderBottom: "1px solid rgba(255,255,255,0.1)",
+  whiteSpace: "nowrap",
+};
+
+const sortBtnStyle: CSSProperties = {
+  background: "transparent",
+  border: "none",
+  padding: 0,
+  fontFamily: '"DM Mono", monospace',
+  fontSize: "10px",
+  textTransform: "uppercase",
+  letterSpacing: "0.18em",
+  fontWeight: 400,
+  color: "inherit",
+  cursor: "pointer",
+};
+
+const tdStyle: CSSProperties = {
+  padding: "14px 16px",
+  borderBottom: "1px solid rgba(255,255,255,0.04)",
+  color: "rgba(228,230,232,0.9)",
+};
+
+// ─── Component ───────────────────────────────────────────────────────
+
 export default function AllIPOs() {
   const [filings, setFilings] = useState<Filing[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,12 +184,22 @@ export default function AllIPOs() {
   useEffect(() => {
     let cancelled = false;
     getAllFilings()
-      .then((rows) => !cancelled && (setFilings(rows), setLoading(false)))
-      .catch((e) => {
+      .then((rows: Filing[]) => {
+        if (!cancelled) {
+          setFilings(rows);
+          setLoading(false);
+        }
+      })
+      .catch((e: unknown) => {
         console.error("[AllIPOs] fetch failed:", e);
-        if (!cancelled) (setFilings([]), setLoading(false));
+        if (!cancelled) {
+          setFilings([]);
+          setLoading(false);
+        }
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const rows = useMemo(() => {
@@ -84,53 +237,53 @@ export default function AllIPOs() {
 
   function sortIndicator(k: SortKey) {
     if (sortKey !== k) return "";
-    return sortDir === "asc" ? "↑" : "↓";
+    return sortDir === "asc" ? " ↑" : " ↓";
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <CalendarNavbar />
-
-      {/* Spacer for fixed nav */}
-      <div className="pt-16" />
-
-      <section className="container pt-16 pb-10">
-        <div className="vv-eyebrow mb-4">The Pipeline · Full List</div>
-        <h1 className="vv-section-title text-[clamp(36px,4vw,60px)] text-foreground mb-3">
-          All <em>IPOs</em>.
+    <div style={pageStyle}>
+      {/* ── Header ──────────────────────────────────────────────── */}
+      <section style={{ ...containerStyle, paddingTop: "48px", paddingBottom: "32px" }}>
+        <div style={eyebrowStyle}>The Pipeline · Full List</div>
+        <h1 style={titleStyle}>
+          All <em style={{ color: "#03c8b5", fontStyle: "italic" }}>IPOs</em>.
         </h1>
-        <p className="text-[15px] text-muted-foreground max-w-2xl font-light leading-[1.75]">
+        <p style={subtitleStyle}>
           Every filing we've tracked from SEC EDGAR. Sortable by any column,
           filterable by filing type, searchable by company / ticker / industry.
         </p>
       </section>
 
-      <section className="container pb-6">
-        <div className="flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+      {/* ── Filter row ──────────────────────────────────────────── */}
+      <section style={{ ...containerStyle, paddingBottom: "8px" }}>
+        <div style={filterRowStyle}>
+          <div style={searchWrapStyle}>
+            <Search
+              style={{
+                position: "absolute",
+                left: "12px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                width: "16px",
+                height: "16px",
+                color: "rgba(228,230,232,0.4)",
+              }}
+            />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search company, ticker, or industry…"
-              className="w-full pl-10 pr-3 py-2.5 bg-card border border-border/60 text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary/60 font-light text-sm"
-              style={{ borderRadius: "2px" }}
+              style={searchInputStyle}
             />
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div style={chipsRowStyle}>
             {FILING_TYPE_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
                 onClick={() => setFilterType(opt.value)}
-                className="px-3 py-2 font-mono text-[10px] uppercase tracking-[0.16em] transition-colors"
-                style={{
-                  borderRadius: "2px",
-                  color: filterType === opt.value ? "var(--primary-foreground)" : "var(--muted-foreground)",
-                  backgroundColor: filterType === opt.value ? "var(--primary)" : "transparent",
-                  border: `1px solid ${filterType === opt.value ? "var(--primary)" : "var(--border)"}`,
-                }}
+                style={chipStyle(filterType === opt.value)}
               >
                 {opt.label}
               </button>
@@ -139,56 +292,87 @@ export default function AllIPOs() {
         </div>
       </section>
 
-      <section className="container pb-24">
+      {/* ── Table ───────────────────────────────────────────────── */}
+      <section style={{ ...containerStyle, paddingBottom: "96px" }}>
         {loading ? (
-          <div className="py-24 text-center font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+          <div style={{ padding: "96px 0", textAlign: "center", color: "rgba(228,230,232,0.5)", fontFamily: '"DM Mono", monospace', fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.18em" }}>
             Loading filings…
           </div>
         ) : rows.length === 0 ? (
-          <div className="py-24 text-center font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+          <div style={{ padding: "96px 0", textAlign: "center", color: "rgba(228,230,232,0.5)", fontFamily: '"DM Mono", monospace', fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.18em" }}>
             No filings match your filters.
           </div>
         ) : (
-          <div className="overflow-x-auto border border-border/40" style={{ borderRadius: "4px" }}>
-            <table className="w-full text-[14px]">
-              <thead className="bg-card/40 border-b border-border/40">
+          <div style={tableWrapStyle}>
+            <table style={tableStyle}>
+              <thead>
                 <tr>
-                  <SortHeader label="Company" active={sortKey === "companyName"} indicator={sortIndicator("companyName")} onClick={() => toggleSort("companyName")} />
-                  <Th>Ticker</Th>
-                  <SortHeader label="Filing type" active={sortKey === "filingType"} indicator={sortIndicator("filingType")} onClick={() => toggleSort("filingType")} />
-                  <SortHeader label="Industry" active={sortKey === "industry"} indicator={sortIndicator("industry")} onClick={() => toggleSort("industry")} />
-                  <SortHeader label="Filing date" active={sortKey === "filingDate"} indicator={sortIndicator("filingDate")} onClick={() => toggleSort("filingDate")} />
-                  <Th>{""}</Th>
+                  <th style={thStyle}>
+                    <button onClick={() => toggleSort("companyName")} style={sortBtnStyle}>
+                      Company{sortIndicator("companyName")}
+                    </button>
+                  </th>
+                  <th style={thStyle}>Ticker</th>
+                  <th style={thStyle}>
+                    <button onClick={() => toggleSort("filingType")} style={sortBtnStyle}>
+                      Filing type{sortIndicator("filingType")}
+                    </button>
+                  </th>
+                  <th style={thStyle}>
+                    <button onClick={() => toggleSort("industry")} style={sortBtnStyle}>
+                      Industry{sortIndicator("industry")}
+                    </button>
+                  </th>
+                  <th style={thStyle}>
+                    <button onClick={() => toggleSort("filingDate")} style={sortBtnStyle}>
+                      Filing date{sortIndicator("filingDate")}
+                    </button>
+                  </th>
+                  <th style={thStyle}>{""}</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((f) => {
                   const accent = filingTypeColor(f.filingType);
-                  const href = (f.heroImageUrl && f.reportSlug)
+                  // Loosened: any filing with reportSlug is clickable.
+                  // The fact-sheet page renders a minimal version if
+                  // the InitiationReport isn't published yet.
+                  const href = f.reportSlug
                     ? `/fact-sheet/${encodeURIComponent(f.reportSlug)}`
                     : null;
                   return (
                     <tr
                       key={f._id}
-                      className={
-                        "border-b border-border/20 transition-colors " +
-                        (href ? "hover:bg-card/40 cursor-pointer" : "opacity-70")
-                      }
+                      style={{ background: "transparent" }}
                     >
-                      <td className="py-3.5 px-4 text-foreground">
+                      <td style={tdStyle}>
                         {href ? (
-                          <Link href={href} className="no-underline text-foreground hover:text-primary transition-colors">
+                          <Link
+                            href={href}
+                            style={{
+                              color: "#e4e6e8",
+                              textDecoration: "none",
+                              fontWeight: 400,
+                            }}
+                          >
                             {f.companyName}
                           </Link>
                         ) : (
                           f.companyName
                         )}
                       </td>
-                      <td className="py-3.5 px-4 font-mono text-[12px] text-primary">{f.ticker || "—"}</td>
-                      <td className="py-3.5 px-4">
+                      <td style={{ ...tdStyle, fontFamily: '"DM Mono", monospace', fontSize: "12px", color: "#03c8b5" }}>
+                        {f.ticker || "—"}
+                      </td>
+                      <td style={tdStyle}>
                         <span
-                          className="inline-block font-mono text-[9px] uppercase tracking-[0.14em] px-2 py-1"
                           style={{
+                            display: "inline-block",
+                            fontFamily: '"DM Mono", monospace',
+                            fontSize: "9px",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.14em",
+                            padding: "4px 8px",
                             color: accent,
                             backgroundColor: `${accent}22`,
                             border: `1px solid ${accent}55`,
@@ -198,15 +382,31 @@ export default function AllIPOs() {
                           {f.filingType}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 text-foreground/85">{f.industry || "—"}</td>
-                      <td className="py-3.5 px-4 font-mono text-[12px] text-foreground/85">{f.filingDate || "—"}</td>
-                      <td className="py-3.5 px-4 text-right">
+                      <td style={tdStyle}>{f.industry || "—"}</td>
+                      <td style={{ ...tdStyle, fontFamily: '"DM Mono", monospace', fontSize: "12px" }}>
+                        {f.filingDate || "—"}
+                      </td>
+                      <td style={{ ...tdStyle, textAlign: "right" }}>
                         {href ? (
-                          <Link href={href} className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.16em] text-primary no-underline">
-                            View <ArrowRight className="w-3 h-3" />
+                          <Link
+                            href={href}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              fontFamily: '"DM Mono", monospace',
+                              fontSize: "10px",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.16em",
+                              color: "#03c8b5",
+                              textDecoration: "none",
+                            }}
+                          >
+                            View
+                            <ArrowRight style={{ width: "12px", height: "12px" }} />
                           </Link>
                         ) : (
-                          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground/60">
+                          <span style={{ fontFamily: '"DM Mono", monospace', fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.16em", color: "rgba(228,230,232,0.3)" }}>
                             Pending
                           </span>
                         )}
@@ -220,36 +420,12 @@ export default function AllIPOs() {
         )}
 
         {!loading && rows.length > 0 ? (
-          <div className="mt-4 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+          <div style={{ marginTop: "16px", fontFamily: '"DM Mono", monospace', fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.18em", color: "rgba(228,230,232,0.4)" }}>
             {rows.length} filing{rows.length === 1 ? "" : "s"} ·{" "}
             {filings && rows.length < filings.length ? `${filings.length} total` : "all"}
           </div>
         ) : null}
       </section>
     </div>
-  );
-}
-
-function Th({ children }: { children: React.ReactNode }) {
-  return (
-    <th className="text-left py-3 px-4 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-normal">
-      {children}
-    </th>
-  );
-}
-
-function SortHeader({ label, active, indicator, onClick }: { label: string; active: boolean; indicator: string; onClick: () => void }) {
-  return (
-    <th className="text-left py-3 px-4">
-      <button
-        onClick={onClick}
-        className={
-          "font-mono text-[10px] uppercase tracking-[0.18em] font-normal hover:text-foreground transition-colors " +
-          (active ? "text-foreground" : "text-muted-foreground")
-        }
-      >
-        {label} <span className="ml-1 opacity-70">{indicator}</span>
-      </button>
-    </th>
   );
 }
