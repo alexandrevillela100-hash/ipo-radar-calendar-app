@@ -1,14 +1,8 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-
   "rewrites": [
     {
-      "source": "/reports/:slug",
-      "destination": "/api/reports/:slug"
-    },
-    {
-      "source": "/factsheet/:slug",
-      "destination": "/api/factsheet/:slug"
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
     }
   ]
 }
