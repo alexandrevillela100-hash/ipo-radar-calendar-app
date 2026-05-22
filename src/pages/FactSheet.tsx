@@ -6,7 +6,6 @@ import {
   Calendar as CalendarIcon,
   DollarSign,
   Download,
-  FileText,
   TrendingUp,
   Users,
   AlertTriangle,
