@@ -13,6 +13,7 @@ import {
   Briefcase,
 } from "lucide-react";
 import FactSheetChat from "@/components/FactSheetChat";
+import PerformanceSection from "@/components/PerformanceSection";
 import {
   getFilingBySlug,
   filingTypeColor,
@@ -322,6 +323,9 @@ export default function FactSheet() {
           />
         </div>
       </section>
+
+      {/* ── Post-IPO Performance (auto-hides if no performance data) ──── */}
+      {filing.performance ? <PerformanceSection filing={filing} /> : null}
 
       {/* ── The Offering ───────────────────────────────────────── */}
       {offering ? (
