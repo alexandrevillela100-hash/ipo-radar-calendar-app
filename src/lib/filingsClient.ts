@@ -1,22 +1,13 @@
 // ============================================================================
-//  filingsClient.ts — drop-in replacement
+//  filingsClient.ts — v2 (adds pricing + performance fields)
 //
 //  Save as:  calendar-app/src/lib/filingsClient.ts (overwrite existing)
 //
-//  Exports:
-//    - Filing interface (rich — includes joined initiationReport fields)
-//    - FilingType / FilingStatus type unions
-//    - filingsClient (Sanity client instance)
-//    - getRecentFilings(limit) — used by FeaturedIPOs and the calendar
-//    - getFilingBySlug(slug)   — used by FactSheet
-//    - getAllFilings()         — used by AllIPOs and the calendar grid
-//    - filingTypeColor(type)   — accent color helper for badges/chips
-//    - filingTypeLabel(type)   — human-readable label (used by DetailPanel)
-//
-//  Required environment variables (Vercel project settings):
-//    VITE_SANITY_PROJECT_ID
-//    VITE_SANITY_DATASET       (defaults to "production")
-//    VITE_SANITY_API_VERSION   (defaults to "2024-10-01")
+//  Changes from v1:
+//    - Filing interface now includes `pricing` (manually entered) and
+//      `performance` (auto-populated by track-performance.js).
+//    - GROQ projection now selects those two top-level fields on the
+//      filing doc directly (no join needed — they live on `filing`).
 // ============================================================================
 
 import { createClient, type SanityClient } from "@sanity/client";
@@ -61,6 +52,28 @@ export type FilingStatus =
   | "trading"
   | "withdrawn";
 
+export interface PricingInfo {
+  ipoDate?: string; // ISO "YYYY-MM-DD"
+  offerPrice?: number;
+  sharesOfferedM?: number;
+  benchmarkSector?: string; // e.g. "XLK"
+}
+
+export interface PerformanceInfo {
+  lastUpdated?: string; // ISO datetime
+  currentPrice?: number;
+  openDay1?: number;
+  closeDay1?: number;
+  firstDayPop?: number; // percent, e.g. 12.4 means +12.4%
+  return7d?: number;
+  return30d?: number;
+  return90d?: number;
+  returnSinceIPO?: number;
+  spy?: { returnSinceIPO?: number };
+  ipoETF?: { returnSinceIPO?: number };
+  history?: Array<{ date: string; price: number }>;
+}
+
 export interface Filing {
   _id: string;
   companyName: string;
@@ -75,6 +88,12 @@ export interface Filing {
   accessionNumber?: string;
   edgarUrl?: string;
   reportSlug?: string;
+
+  // Manually entered once the IPO prices:
+  pricing?: PricingInfo;
+
+  // Auto-populated by the nightly tracker job:
+  performance?: PerformanceInfo;
 
   // Joined-in from initiationReport when one exists:
   heroImageUrl?: string;
@@ -105,10 +124,6 @@ export interface Filing {
 }
 
 // ─── GROQ projection shared by all three queries ────────────────────
-// The sub-queries match a published `initiationReport` whose slug
-// equals the filing's `reportSlug`. Each pulls one field. Filings
-// without a matching report get `null` for every joined field —
-// consumers gracefully hide empty sections.
 const PROJECTION = /* groq */ `
   _id,
   companyName,
@@ -123,6 +138,8 @@ const PROJECTION = /* groq */ `
   accessionNumber,
   edgarUrl,
   reportSlug,
+  pricing,
+  performance,
   "heroImageUrl": *[
     _type == "initiationReport"
     && defined(^.reportSlug)
@@ -175,10 +192,6 @@ const PROJECTION = /* groq */ `
 
 // ─── Queries ────────────────────────────────────────────────────────
 
-/**
- * Most recent N filings, ordered by filingDate desc.
- * Used by the landing page's FeaturedIPOs grid.
- */
 export async function getRecentFilings(limit = 30): Promise<Filing[]> {
   const query = `
     *[_type == "filing"] | order(filingDate desc) [0...$limit] {
@@ -188,10 +201,6 @@ export async function getRecentFilings(limit = 30): Promise<Filing[]> {
   return filingsClient.fetch<Filing[]>(query, { limit });
 }
 
-/**
- * Single filing by reportSlug (or by the filing doc's own slug).
- * Used by the FactSheet page.
- */
 export async function getFilingBySlug(
   slug: string,
 ): Promise<Filing | null> {
@@ -207,10 +216,6 @@ export async function getFilingBySlug(
   return result ?? null;
 }
 
-/**
- * Every filing in the dataset, ordered by filingDate desc.
- * Used by AllIPOs and the calendar homepage.
- */
 export async function getAllFilings(): Promise<Filing[]> {
   const query = `
     *[_type == "filing"] | order(filingDate desc) {
@@ -222,14 +227,6 @@ export async function getAllFilings(): Promise<Filing[]> {
 
 // ─── UI helpers ─────────────────────────────────────────────────────
 
-/**
- * Accent color (hex) for badges and chips, keyed by filing type.
- * Tuned to the Velocia palette:
- *   - S-1, F-1     → teal (new filings, on the radar)
- *   - S-1/A, F-1/A → gold (amendments, material updates)
- *   - 424B         → indigo (pricing finalized)
- *   - RW           → red (withdrawn)
- */
 export function filingTypeColor(type: FilingType): string {
   switch (type) {
     case "S-1":
@@ -243,22 +240,10 @@ export function filingTypeColor(type: FilingType): string {
     case "RW":
       return "#d86060"; // red
     default:
-      return "#8b9099"; // muted gray
+      return "#8b9099";
   }
 }
 
-/**
- * Human-readable label for a filing type. Used by DetailPanel.tsx
- * (and any other component that wants a friendlier name than the
- * raw form type).
- *
- *   "S-1"   → "Initial Registration"
- *   "S-1/A" → "Amendment"
- *   "F-1"   → "Foreign Registration"
- *   "F-1/A" → "Foreign Amendment"
- *   "424B"  → "Pricing"
- *   "RW"    → "Withdrawn"
- */
 export function filingTypeLabel(type: FilingType): string {
   switch (type) {
     case "S-1":
@@ -276,4 +261,26 @@ export function filingTypeLabel(type: FilingType): string {
     default:
       return type;
   }
+}
+
+/**
+ * Format a percent number for display.
+ *   formatPct(12.5)  → "+12.5%"
+ *   formatPct(-3.1)  → "-3.1%"
+ *   formatPct(undefined) → "—"
+ */
+export function formatPct(n: number | undefined, digits = 1): string {
+  if (n === undefined || n === null || Number.isNaN(n)) return "—";
+  const sign = n > 0 ? "+" : "";
+  return `${sign}${n.toFixed(digits)}%`;
+}
+
+/**
+ * Return color for a percent value (teal up, red down, muted flat).
+ */
+export function returnColor(n: number | undefined): string {
+  if (n === undefined || n === null || Number.isNaN(n)) return "#8b9099";
+  if (n > 0.05) return "#03c8b5";
+  if (n < -0.05) return "#d86060";
+  return "#8b9099";
 }
