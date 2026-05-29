@@ -7,6 +7,7 @@ import {
   filingTypeColor,
   type Filing,
 } from "@/lib/filingsClient";
+import ReturnBadge from "@/components/ReturnBadge";
 
 /**
  * AllIPOs — v3.
@@ -328,6 +329,7 @@ export default function AllIPOs() {
                       Filing date{sortIndicator("filingDate")}
                     </button>
                   </th>
+                  <th style={thStyle}>Performance</th>
                   <th style={thStyle}>{""}</th>
                 </tr>
               </thead>
@@ -385,6 +387,9 @@ export default function AllIPOs() {
                       <td style={tdStyle}>{f.industry || "—"}</td>
                       <td style={{ ...tdStyle, fontFamily: '"DM Mono", monospace', fontSize: "12px" }}>
                         {f.filingDate || "—"}
+                      </td>
+                      <td style={tdStyle}>
+                        <ReturnBadge value={f.performance?.returnSinceIPO} size="sm" />
                       </td>
                       <td style={{ ...tdStyle, textAlign: "right" }}>
                         {href ? (
