@@ -3,12 +3,12 @@ import { Radar, ExternalLink } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 /**
- * CalendarNavbar v2 — top nav for the calendar-app.
+ * CalendarNavbar v3 — top nav for the calendar-app.
  *
  * Save as:  calendar-app/src/components/CalendarNavbar.tsx (overwrite)
  *
- * Uses inline styles (no Tailwind dependency) so it renders correctly
- * in the calendar-app which doesn't have Tailwind configured.
+ * Changes from v2:
+ *   - Adds "Pipeline" nav item between Calendar and All IPOs.
  */
 
 const LANDING_PAGE_URL = "https://ipo-radar-webp.vercel.app";
@@ -89,6 +89,9 @@ export default function CalendarNavbar() {
           <Link href="/" style={linkStyle(isActive("/"))}>
             Calendar
           </Link>
+          <Link href="/pipeline" style={linkStyle(isActive("/pipeline"))}>
+            Pipeline
+          </Link>
           <Link href="/ipos" style={linkStyle(isActive("/ipos"))}>
             All IPOs
           </Link>
@@ -105,8 +108,7 @@ export default function CalendarNavbar() {
           </a>
         </div>
 
-        {/* Right-side spacer (kept for visual balance with the
-            landing-page nav which has a Sign in button here). */}
+        {/* Right-side spacer */}
         <div style={{ width: "100px" }} aria-hidden="true" />
       </div>
     </nav>
