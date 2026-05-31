@@ -1,14 +1,16 @@
 // ============================================================================
-//  filingsClient.ts — v3 (adds comparables + pipelineStage helper)
+//  filingsClient.ts — v5 (adds full financials schema for XLSX export)
 //
-//  Save as:  calendar-app/src/lib/filingsClient.ts (overwrite v2)
+//  Save as:  calendar-app/src/lib/filingsClient.ts (overwrite v4)
 //
-//  Changes from v2:
-//    - Filing interface adds:
-//        compTickers?:  string[]                — manually curated input
-//        comps?:        CompCompany[]           — auto-populated by tracker
-//    - New CompCompany type
-//    - New pipelineStage() helper used by Pipeline page
+//  Changes from v4:
+//    - New `financialsDeep` object on Filing with four arrays:
+//        pnl[]          — P&L / Income Statement rows by FY
+//        balanceSheet[] — Balance Sheet rows by FY
+//        cashFlow[]     — Cash Flow Statement rows by FY
+//        capTable[]     — Cap Table at IPO, one row per holder
+//    - GROQ projection passes through the new object.
+//    - All money values in $M unless noted.
 // ============================================================================
 
 import { createClient, type SanityClient } from "@sanity/client";
@@ -75,22 +77,118 @@ export interface PerformanceInfo {
   history?: Array<{ date: string; price: number }>;
 }
 
-/**
- * One comparable public company. Populated by track-comparables.js.
- * All ratios are plain numbers (P/S = 12.3 means 12.3x).
- * Margins are stored as percentages (45.2 = 45.2%).
- */
 export interface CompCompany {
   ticker: string;
   name?: string;
-  marketCapM?: number; // in $M
-  revenueM?: number; // TTM, in $M
-  ps?: number; // price-to-sales TTM
-  evRevenue?: number; // EV/Revenue
-  peRatio?: number; // trailing P/E
-  grossMargin?: number; // %
+  marketCapM?: number;
+  revenueM?: number;
+  ps?: number;
+  evRevenue?: number;
+  peRatio?: number;
+  grossMargin?: number;
   lastUpdated?: string;
 }
+
+// ─── Deep financials (for XLSX export) ──────────────────────────────
+
+/** Income Statement row. All money values in $M. */
+export interface PnLRow {
+  fy: string; // e.g. "FY2023", "2023", "2023 (LTM)"
+  revenue?: number;
+  costOfRevenue?: number;
+  grossProfit?: number;
+  researchDev?: number;
+  salesMarketing?: number;
+  generalAdmin?: number;
+  totalOpex?: number;
+  operatingIncome?: number;
+  interestNet?: number;
+  otherIncome?: number;
+  preTaxIncome?: number;
+  tax?: number;
+  netIncome?: number;
+  basicEPS?: number; // $ per share
+  dilutedEPS?: number;
+}
+
+/** Balance Sheet row. All money values in $M, point-in-time. */
+export interface BalanceSheetRow {
+  fy: string;
+  cashEquivalents?: number;
+  shortTermInvestments?: number;
+  accountsReceivable?: number;
+  inventory?: number;
+  otherCurrentAssets?: number;
+  totalCurrentAssets?: number;
+  propertyEquipment?: number;
+  goodwill?: number;
+  intangibles?: number;
+  otherLTAssets?: number;
+  totalAssets?: number;
+  accountsPayable?: number;
+  accruedLiabilities?: number;
+  currentDebt?: number;
+  deferredRevenueCurrent?: number;
+  totalCurrentLiabilities?: number;
+  longTermDebt?: number;
+  otherLTLiabilities?: number;
+  totalLiabilities?: number;
+  commonStock?: number;
+  additionalPaidInCapital?: number;
+  accumulatedDeficit?: number;
+  totalEquity?: number;
+}
+
+/** Cash Flow row. All money values in $M. */
+export interface CashFlowRow {
+  fy: string;
+  netIncome?: number;
+  depreciationAmort?: number;
+  stockBasedComp?: number;
+  workingCapital?: number;
+  otherOperating?: number;
+  cfo?: number; // operating
+  capex?: number;
+  acquisitions?: number;
+  otherInvesting?: number;
+  cfi?: number; // investing
+  stockIssuance?: number;
+  stockBuybacks?: number;
+  debtNet?: number;
+  dividends?: number;
+  otherFinancing?: number;
+  cff?: number; // financing
+  netChangeInCash?: number;
+}
+
+/** Cap Table row — one per holder/group at the time of IPO. */
+export interface CapTableRow {
+  holder: string;
+  holderType?:
+    | "founder"
+    | "investor"
+    | "employee"
+    | "ipo-float"
+    | "other";
+  sharesM?: number; // in millions
+  pctPreIPO?: number; // % (e.g. 12.3)
+  pctPostIPO?: number;
+  lockupDays?: number; // default 180 if undefined
+  notes?: string;
+}
+
+export interface FinancialsDeep {
+  currency?: string; // "USD", "EUR" etc. (default USD)
+  fiscalYearEnd?: string; // "Dec 31", "Mar 31" etc.
+  source?: string; // e.g. "S-1 filed 2024-02-22"
+  lastUpdated?: string;
+  pnl?: PnLRow[];
+  balanceSheet?: BalanceSheetRow[];
+  cashFlow?: CashFlowRow[];
+  capTable?: CapTableRow[];
+}
+
+// ─── Filing ─────────────────────────────────────────────────────────
 
 export interface Filing {
   _id: string;
@@ -110,11 +208,9 @@ export interface Filing {
   pricing?: PricingInfo;
   performance?: PerformanceInfo;
 
-  // Comparables (valuation engine):
-  compTickers?: string[]; // manually curated input list
-  comps?: CompCompany[]; // populated nightly by track-comparables.js
+  compTickers?: string[];
+  comps?: CompCompany[];
 
-  // Joined-in from initiationReport when one exists:
   heroImageUrl?: string;
   pdfReportUrl?: string;
 
@@ -124,6 +220,9 @@ export interface Filing {
     grossProceedsM?: number;
     impliedValuationM?: number;
   };
+
+  leadUnderwriters?: string[];
+  grossProceedsM?: number;
 
   useOfProceeds?: string[];
   keyRisks?: string[];
@@ -138,11 +237,14 @@ export interface Filing {
     }>;
   };
 
-  leadUnderwriters?: string[];
-  comparables?: string[]; // legacy name-only list, kept for backwards compat
+  // Deep financials (for XLSX export). Populated by seed-financials-deep.js
+  // and editable in Sanity.
+  financialsDeep?: FinancialsDeep;
+
+  comparables?: string[];
 }
 
-// ─── GROQ projection shared by all queries ──────────────────────────
+// ─── GROQ projection ────────────────────────────────────────────────
 const PROJECTION = /* groq */ `
   _id,
   companyName,
@@ -161,6 +263,7 @@ const PROJECTION = /* groq */ `
   performance,
   compTickers,
   comps,
+  financialsDeep,
   "heroImageUrl": *[
     _type == "initiationReport"
     && defined(^.reportSlug)
@@ -197,12 +300,24 @@ const PROJECTION = /* groq */ `
     && slug.current == ^.reportSlug
     && status == "published"
   ][0].financials,
-  "leadUnderwriters": *[
-    _type == "initiationReport"
-    && defined(^.reportSlug)
-    && slug.current == ^.reportSlug
-    && status == "published"
-  ][0].leadUnderwriters,
+  "leadUnderwriters": coalesce(
+    leadUnderwriters,
+    *[
+      _type == "initiationReport"
+      && defined(^.reportSlug)
+      && slug.current == ^.reportSlug
+      && status == "published"
+    ][0].leadUnderwriters
+  ),
+  "grossProceedsM": coalesce(
+    grossProceedsM,
+    *[
+      _type == "initiationReport"
+      && defined(^.reportSlug)
+      && slug.current == ^.reportSlug
+      && status == "published"
+    ][0].offering.grossProceedsM
+  ),
   "comparables": *[
     _type == "initiationReport"
     && defined(^.reportSlug)
@@ -222,9 +337,7 @@ export async function getRecentFilings(limit = 30): Promise<Filing[]> {
   return filingsClient.fetch<Filing[]>(query, { limit });
 }
 
-export async function getFilingBySlug(
-  slug: string,
-): Promise<Filing | null> {
+export async function getFilingBySlug(slug: string): Promise<Filing | null> {
   const query = `
     *[
       _type == "filing"
@@ -297,9 +410,6 @@ export function returnColor(n: number | undefined): string {
   return "#8b9099";
 }
 
-/**
- * Format a $M number as "$1.2B" / "$345M" / "$12.5M".
- */
 export function formatMoneyM(n: number | undefined): string {
   if (n === undefined || n === null || Number.isNaN(n)) return "—";
   if (n >= 1000) return `$${(n / 1000).toFixed(1)}B`;
@@ -307,7 +417,6 @@ export function formatMoneyM(n: number | undefined): string {
   return `$${(n * 1000).toFixed(0)}K`;
 }
 
-/** Format an N.Nx multiple. */
 export function formatMultiple(n: number | undefined): string {
   if (n === undefined || n === null || Number.isNaN(n)) return "—";
   return `${n.toFixed(1)}x`;
@@ -353,15 +462,10 @@ export const PIPELINE_STAGE_COLOR: Record<PipelineStage, string> = {
   withdrawn: "#d86060",
 };
 
-/**
- * Classify a single filing into a pipeline stage.
- * The Pipeline page dedupes by company and picks the furthest stage.
- */
 export function pipelineStage(f: Filing): PipelineStage {
   if (f.filingType === "RW" || f.status === "withdrawn") return "withdrawn";
   if (f.performance?.currentPrice || f.status === "trading") return "trading";
-  if (f.filingType === "424B" || f.status === "pricing-window")
-    return "pricing";
+  if (f.filingType === "424B" || f.status === "pricing-window") return "pricing";
   if (
     f.filingType === "S-1/A" ||
     f.filingType === "F-1/A" ||
@@ -371,7 +475,6 @@ export function pipelineStage(f: Filing): PipelineStage {
   return "filed";
 }
 
-/** Numeric rank for "furthest along" — higher means further along. */
 const STAGE_RANK: Record<PipelineStage, number> = {
   withdrawn: -1,
   filed: 0,
@@ -380,11 +483,6 @@ const STAGE_RANK: Record<PipelineStage, number> = {
   trading: 3,
 };
 
-/**
- * Given a list of filings (possibly multiple per company), dedupe by
- * company identifier and return one Filing per company representing
- * its furthest pipeline stage. Used by the Pipeline page.
- */
 export function dedupeByCompany(filings: Filing[]): Filing[] {
   const byKey = new Map<string, Filing>();
   for (const f of filings) {
@@ -397,7 +495,6 @@ export function dedupeByCompany(filings: Filing[]): Filing[] {
     }
     const a = STAGE_RANK[pipelineStage(existing)];
     const b = STAGE_RANK[pipelineStage(f)];
-    // Keep the furthest along. On tie, keep the more recent filing.
     if (b > a) {
       byKey.set(key, f);
     } else if (b === a) {
@@ -409,12 +506,90 @@ export function dedupeByCompany(filings: Filing[]): Filing[] {
   return Array.from(byKey.values());
 }
 
-/**
- * Days since a date string (YYYY-MM-DD).
- */
 export function daysSince(iso: string | undefined): number | undefined {
   if (!iso) return undefined;
   const d = new Date(iso);
   if (isNaN(d.getTime())) return undefined;
   return Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+// ─── Lockup helpers ─────────────────────────────────────────────────
+
+export const LOCKUP_DAYS = 180;
+
+export function lockupExpiration(f: Filing): string | undefined {
+  const ipo = f.pricing?.ipoDate;
+  if (!ipo) return undefined;
+  const d = new Date(ipo);
+  if (isNaN(d.getTime())) return undefined;
+  d.setDate(d.getDate() + LOCKUP_DAYS);
+  return d.toISOString().slice(0, 10);
+}
+
+export function daysUntilLockup(f: Filing): number | undefined {
+  const exp = lockupExpiration(f);
+  if (!exp) return undefined;
+  const target = new Date(exp);
+  return Math.floor((target.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+}
+
+// ─── Underwriter normalization ──────────────────────────────────────
+
+const UNDERWRITER_CANONICAL: Array<[RegExp, string]> = [
+  [/^goldman/i, "Goldman Sachs"],
+  [/^morgan stanley/i, "Morgan Stanley"],
+  [/^j\.?\s*p\.?\s*morgan|^jp ?morgan/i, "J.P. Morgan"],
+  [/^bofa|^bank of america|^merrill lynch/i, "Bank of America"],
+  [/^citi/i, "Citigroup"],
+  [/^barclays/i, "Barclays"],
+  [/^deutsche bank|^db securities/i, "Deutsche Bank"],
+  [/^mizuho/i, "Mizuho"],
+  [/^credit suisse|^cs securities/i, "Credit Suisse"],
+  [/^ubs/i, "UBS"],
+  [/^jefferies/i, "Jefferies"],
+  [/^wells fargo/i, "Wells Fargo"],
+  [/^evercore/i, "Evercore"],
+  [/^cowen/i, "Cowen"],
+  [/^raymond james/i, "Raymond James"],
+  [/^rbc/i, "RBC Capital Markets"],
+  [/^bmo/i, "BMO Capital Markets"],
+  [/^nomura/i, "Nomura"],
+  [/^bnp|^bnp paribas/i, "BNP Paribas"],
+  [/^hsbc/i, "HSBC"],
+  [/^stifel/i, "Stifel"],
+  [/^piper sandler/i, "Piper Sandler"],
+  [/^needham/i, "Needham"],
+  [/^william blair/i, "William Blair"],
+];
+
+export function normalizeUnderwriter(s: string): string {
+  const trimmed = (s || "").trim();
+  if (!trimmed) return trimmed;
+  for (const [re, name] of UNDERWRITER_CANONICAL) {
+    if (re.test(trimmed)) return name;
+  }
+  return trimmed
+    .replace(/,?\s*(LLC|Inc\.?|Incorporated|Co\.?|& Co\.?|Securities)\s*$/i, "")
+    .trim();
+}
+
+export function underwriterSlug(name: string): string {
+  return normalizeUnderwriter(name)
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/\./g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/** Returns true if filing has *any* financialsDeep data worth exporting. */
+export function hasFinancialsDeep(f: Filing): boolean {
+  const fd = f.financialsDeep;
+  if (!fd) return false;
+  return (
+    (fd.pnl?.length ?? 0) > 0 ||
+    (fd.balanceSheet?.length ?? 0) > 0 ||
+    (fd.cashFlow?.length ?? 0) > 0 ||
+    (fd.capTable?.length ?? 0) > 0
+  );
 }
