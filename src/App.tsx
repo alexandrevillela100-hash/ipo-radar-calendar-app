@@ -3,18 +3,26 @@ import Calendar from "@/pages/Calendar";
 import FactSheet from "@/pages/FactSheet";
 import AllIPOs from "@/pages/AllIPOs";
 import Pipeline from "@/pages/Pipeline";
+import Compare from "@/pages/Compare";
+import Underwriters from "@/pages/Underwriters";
+import UnderwriterDetail from "@/pages/UnderwriterDetail";
+import Lockups from "@/pages/Lockups";
 import CalendarNavbar from "@/components/CalendarNavbar";
 
 /**
- * App v3 — adds /pipeline route.
+ * App v4 — adds /compare, /underwriters, /underwriters/:slug, /lockups.
  *
  * Save as:  calendar-app/src/App.tsx (overwrite)
  *
  * Routes:
- *   /                 → Calendar grid (homepage)
- *   /pipeline         → IPO Pipeline kanban
- *   /ipos             → All IPOs browseable list
- *   /fact-sheet/:slug → Per-company fact sheet
+ *   /                            → Calendar (homepage)
+ *   /pipeline                    → IPO kanban
+ *   /ipos                        → All IPOs list
+ *   /fact-sheet/:slug            → Per-company fact sheet
+ *   /compare/:slugA/vs/:slugB    → Side-by-side compare
+ *   /underwriters                → League table
+ *   /underwriters/:slug          → Underwriter detail
+ *   /lockups                     → Lockup expiration tracker
  */
 
 export default function App() {
@@ -26,6 +34,10 @@ export default function App() {
         <Route path="/pipeline" component={Pipeline} />
         <Route path="/ipos" component={AllIPOs} />
         <Route path="/fact-sheet/:slug" component={FactSheet} />
+        <Route path="/compare/:slugA/vs/:slugB" component={Compare} />
+        <Route path="/underwriters" component={Underwriters} />
+        <Route path="/underwriters/:slug" component={UnderwriterDetail} />
+        <Route path="/lockups" component={Lockups} />
         <Route>
           <div
             style={{
