@@ -3,12 +3,13 @@ import { Radar, ExternalLink } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 /**
- * CalendarNavbar v3 — top nav for the calendar-app.
+ * CalendarNavbar v4 — top nav for the calendar-app.
  *
  * Save as:  calendar-app/src/components/CalendarNavbar.tsx (overwrite)
  *
- * Changes from v2:
- *   - Adds "Pipeline" nav item between Calendar and All IPOs.
+ * Changes from v3:
+ *   - Adds Underwriters + Lockups nav items.
+ *   - Compare page (/compare/...) is accessible by URL only, not via nav.
  */
 
 const LANDING_PAGE_URL = "https://ipo-radar-webp.vercel.app";
@@ -26,7 +27,7 @@ const navStyle: CSSProperties = {
 };
 
 const containerStyle: CSSProperties = {
-  maxWidth: "1280px",
+  maxWidth: "1400px",
   margin: "0 auto",
   padding: "0 32px",
   height: "64px",
@@ -46,7 +47,7 @@ const logoStyle: CSSProperties = {
 const navItemsStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: "32px",
+  gap: "24px",
 };
 
 function linkStyle(active: boolean): CSSProperties {
@@ -75,7 +76,6 @@ export default function CalendarNavbar() {
   return (
     <nav style={navStyle}>
       <div style={containerStyle}>
-        {/* Logo */}
         <Link href="/" style={logoStyle}>
           <Radar style={{ width: "20px", height: "20px", color: "#03c8b5" }} />
           <span style={{ fontSize: "16px", fontWeight: 700, color: "#e4e6e8" }}>
@@ -84,7 +84,6 @@ export default function CalendarNavbar() {
           </span>
         </Link>
 
-        {/* Nav links */}
         <div style={navItemsStyle}>
           <Link href="/" style={linkStyle(isActive("/"))}>
             Calendar
@@ -94,6 +93,15 @@ export default function CalendarNavbar() {
           </Link>
           <Link href="/ipos" style={linkStyle(isActive("/ipos"))}>
             All IPOs
+          </Link>
+          <Link
+            href="/underwriters"
+            style={linkStyle(isActive("/underwriters"))}
+          >
+            Underwriters
+          </Link>
+          <Link href="/lockups" style={linkStyle(isActive("/lockups"))}>
+            Lockups
           </Link>
           <a
             href={LANDING_PAGE_URL}
@@ -108,7 +116,6 @@ export default function CalendarNavbar() {
           </a>
         </div>
 
-        {/* Right-side spacer */}
         <div style={{ width: "100px" }} aria-hidden="true" />
       </div>
     </nav>
