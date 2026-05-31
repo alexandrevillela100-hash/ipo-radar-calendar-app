@@ -101,23 +101,6 @@ const CF_FIELDS: Array<[keyof CashFlowRow, string]> = [
   ["netChangeInCash", "Net change in cash"],
 ];
 
-const TOTAL_ROW_KEYS = new Set([
-  "grossProfit",
-  "totalOpex",
-  "operatingIncome",
-  "preTaxIncome",
-  "netIncome",
-  "totalCurrentAssets",
-  "totalAssets",
-  "totalCurrentLiabilities",
-  "totalLiabilities",
-  "totalEquity",
-  "cfo",
-  "cfi",
-  "cff",
-  "netChangeInCash",
-]);
-
 // ─── Workbook builder ───────────────────────────────────────────────
 
 function buildCoverSheet(filing: Filing): XLSX.WorkSheet {
