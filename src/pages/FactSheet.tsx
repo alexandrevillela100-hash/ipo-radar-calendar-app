@@ -15,23 +15,24 @@ import {
 import FactSheetChat from "@/components/FactSheetChat";
 import PerformanceSection from "@/components/PerformanceSection";
 import ComparablesSection from "@/components/ComparablesSection";
+import DownloadFinancialsButton from "@/components/DownloadFinancialsButton";
 import {
   getFilingBySlug,
   filingTypeColor,
+  hasFinancialsDeep,
   type Filing,
 } from "@/lib/filingsClient";
 
 /**
- * FactSheet — v6.
+ * FactSheet — v7.
  *
- * Save as:  calendar-app/src/pages/FactSheet.tsx (overwrite v5)
+ * Save as:  calendar-app/src/pages/FactSheet.tsx (overwrite v6)
  *
- * Changes from v5:
- *   - Adds ComparablesSection between Financial Snapshot and Bankers & Peers.
- *   - Renders only when filing.comps has at least one entry.
- *
- * All styling inline (no Tailwind dependency).
- * Loads Google Fonts on mount.
+ * Changes from v6:
+ *   - CTA bar shows Download Financials (XLSX) button when
+ *     filing.financialsDeep is present.
+ *   - CTA bar visibility broadens to also appear when XLSX is
+ *     available (not just PDF or report link).
  */
 
 const COLORS = {
@@ -97,8 +98,6 @@ const subTitleStyle: CSSProperties = {
   fontWeight: 300,
 };
 
-// ─── Helpers ────────────────────────────────────────────────────────
-
 function shortDate(iso: string | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -117,8 +116,6 @@ function formatMoney(n: number | undefined): string {
   return `$${(n * 1000).toFixed(0)}K`;
 }
 
-// ─── Component ──────────────────────────────────────────────────────
-
 export default function FactSheet() {
   const [match, params] = useRoute("/fact-sheet/:slug");
   const slug = match ? params.slug : null;
@@ -128,16 +125,12 @@ export default function FactSheet() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Load Google Fonts on mount (idempotent).
     if (!document.querySelector(`link[href="${FONT_HREF}"]`)) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
       link.href = FONT_HREF;
       document.head.appendChild(link);
     }
-    return () => {
-      // keep fonts attached on unmount
-    };
   }, []);
 
   useEffect(() => {
@@ -203,6 +196,8 @@ export default function FactSheet() {
   const fullReportHref = filing.reportSlug
     ? `/reports/${encodeURIComponent(filing.reportSlug)}`
     : null;
+  const xlsxAvailable = hasFinancialsDeep(filing);
+  const showCta = !!(pdfUrl || fullReportHref || xlsxAvailable);
 
   return (
     <div style={pageStyle}>
@@ -232,7 +227,6 @@ export default function FactSheet() {
             />
           ) : null}
 
-          {/* Dark gradient scrim */}
           <div
             style={{
               position: "absolute",
@@ -243,7 +237,6 @@ export default function FactSheet() {
             }}
           />
 
-          {/* Content */}
           <div
             style={{
               ...containerStyle,
@@ -344,7 +337,7 @@ export default function FactSheet() {
           <QuickFact
             icon={<DollarSign size={14} />}
             label="Gross proceeds"
-            value={formatMoney(offering?.grossProceedsM)}
+            value={formatMoney(offering?.grossProceedsM ?? filing.grossProceedsM)}
           />
           <QuickFact
             icon={<TrendingUp size={14} />}
@@ -354,7 +347,7 @@ export default function FactSheet() {
         </div>
       </section>
 
-      {/* ── Post-IPO Performance (auto-hides if none) ─────────── */}
+      {/* ── Performance ────────────────────────────────────────── */}
       {filing.performance ? <PerformanceSection filing={filing} /> : null}
 
       {/* ── The Offering ───────────────────────────────────────── */}
@@ -510,7 +503,7 @@ export default function FactSheet() {
         </Section>
       ) : null}
 
-      {/* ── Comparable companies (auto-hides if no comps) ──────── */}
+      {/* ── Comparables ────────────────────────────────────────── */}
       {filing.comps && filing.comps.length > 0 ? (
         <ComparablesSection filing={filing} />
       ) : null}
@@ -579,7 +572,7 @@ export default function FactSheet() {
       ) : null}
 
       {/* ── CTA bar ────────────────────────────────────────────── */}
-      {pdfUrl || fullReportHref ? (
+      {showCta ? (
         <section
           style={{
             borderTop: `1px solid ${COLORS.border}`,
@@ -608,10 +601,15 @@ export default function FactSheet() {
                   marginTop: "6px",
                 }}
               >
-                Download the full 30-page initiation report, or read it online.
+                {xlsxAvailable
+                  ? "Download the full financial workbook (Excel), the 30-page initiation report (PDF), or read it online."
+                  : "Download the full 30-page initiation report, or read it online."}
               </div>
             </div>
             <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+              {xlsxAvailable ? (
+                <DownloadFinancialsButton filing={filing} variant="primary" />
+              ) : null}
               {pdfUrl ? (
                 <a
                   href={pdfUrl}
