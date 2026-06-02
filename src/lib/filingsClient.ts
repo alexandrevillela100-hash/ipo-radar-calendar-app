@@ -1,16 +1,13 @@
 // ============================================================================
-//  filingsClient.ts — v5 (adds full financials schema for XLSX export)
+//  filingsClient.ts — v6 (adds sector classification)
 //
-//  Save as:  calendar-app/src/lib/filingsClient.ts (overwrite v4)
+//  Save as:  calendar-app/src/lib/filingsClient.ts (overwrite v5)
 //
-//  Changes from v4:
-//    - New `financialsDeep` object on Filing with four arrays:
-//        pnl[]          — P&L / Income Statement rows by FY
-//        balanceSheet[] — Balance Sheet rows by FY
-//        cashFlow[]     — Cash Flow Statement rows by FY
-//        capTable[]     — Cap Table at IPO, one row per holder
-//    - GROQ projection passes through the new object.
-//    - All money values in $M unless noted.
+//  Changes from v5:
+//    - SECTORS constant — 10 canonical sectors with labels, descriptions,
+//      and benchmark ETF tickers
+//    - canonicalSector(filing) — maps a filing to a sector slug
+//    - sectorLabel(slug), sectorEtf(slug), sectorDescription(slug)
 // ============================================================================
 
 import { createClient, type SanityClient } from "@sanity/client";
@@ -89,11 +86,8 @@ export interface CompCompany {
   lastUpdated?: string;
 }
 
-// ─── Deep financials (for XLSX export) ──────────────────────────────
-
-/** Income Statement row. All money values in $M. */
 export interface PnLRow {
-  fy: string; // e.g. "FY2023", "2023", "2023 (LTM)"
+  fy: string;
   revenue?: number;
   costOfRevenue?: number;
   grossProfit?: number;
@@ -107,11 +101,10 @@ export interface PnLRow {
   preTaxIncome?: number;
   tax?: number;
   netIncome?: number;
-  basicEPS?: number; // $ per share
+  basicEPS?: number;
   dilutedEPS?: number;
 }
 
-/** Balance Sheet row. All money values in $M, point-in-time. */
 export interface BalanceSheetRow {
   fy: string;
   cashEquivalents?: number;
@@ -139,7 +132,6 @@ export interface BalanceSheetRow {
   totalEquity?: number;
 }
 
-/** Cash Flow row. All money values in $M. */
 export interface CashFlowRow {
   fy: string;
   netIncome?: number;
@@ -147,48 +139,40 @@ export interface CashFlowRow {
   stockBasedComp?: number;
   workingCapital?: number;
   otherOperating?: number;
-  cfo?: number; // operating
+  cfo?: number;
   capex?: number;
   acquisitions?: number;
   otherInvesting?: number;
-  cfi?: number; // investing
+  cfi?: number;
   stockIssuance?: number;
   stockBuybacks?: number;
   debtNet?: number;
   dividends?: number;
   otherFinancing?: number;
-  cff?: number; // financing
+  cff?: number;
   netChangeInCash?: number;
 }
 
-/** Cap Table row — one per holder/group at the time of IPO. */
 export interface CapTableRow {
   holder: string;
-  holderType?:
-    | "founder"
-    | "investor"
-    | "employee"
-    | "ipo-float"
-    | "other";
-  sharesM?: number; // in millions
-  pctPreIPO?: number; // % (e.g. 12.3)
+  holderType?: "founder" | "investor" | "employee" | "ipo-float" | "other";
+  sharesM?: number;
+  pctPreIPO?: number;
   pctPostIPO?: number;
-  lockupDays?: number; // default 180 if undefined
+  lockupDays?: number;
   notes?: string;
 }
 
 export interface FinancialsDeep {
-  currency?: string; // "USD", "EUR" etc. (default USD)
-  fiscalYearEnd?: string; // "Dec 31", "Mar 31" etc.
-  source?: string; // e.g. "S-1 filed 2024-02-22"
+  currency?: string;
+  fiscalYearEnd?: string;
+  source?: string;
   lastUpdated?: string;
   pnl?: PnLRow[];
   balanceSheet?: BalanceSheetRow[];
   cashFlow?: CashFlowRow[];
   capTable?: CapTableRow[];
 }
-
-// ─── Filing ─────────────────────────────────────────────────────────
 
 export interface Filing {
   _id: string;
@@ -237,10 +221,7 @@ export interface Filing {
     }>;
   };
 
-  // Deep financials (for XLSX export). Populated by seed-financials-deep.js
-  // and editable in Sanity.
   financialsDeep?: FinancialsDeep;
-
   comparables?: string[];
 }
 
@@ -329,34 +310,27 @@ const PROJECTION = /* groq */ `
 // ─── Queries ────────────────────────────────────────────────────────
 
 export async function getRecentFilings(limit = 30): Promise<Filing[]> {
-  const query = `
-    *[_type == "filing"] | order(filingDate desc) [0...$limit] {
-      ${PROJECTION}
-    }
-  `;
-  return filingsClient.fetch<Filing[]>(query, { limit });
+  return filingsClient.fetch<Filing[]>(
+    `*[_type == "filing"] | order(filingDate desc) [0...$limit] { ${PROJECTION} }`,
+    { limit },
+  );
 }
 
 export async function getFilingBySlug(slug: string): Promise<Filing | null> {
-  const query = `
-    *[
+  const result = await filingsClient.fetch<Filing | null>(
+    `*[
       _type == "filing"
       && (reportSlug == $slug || slug.current == $slug)
-    ][0] {
-      ${PROJECTION}
-    }
-  `;
-  const result = await filingsClient.fetch<Filing | null>(query, { slug });
+    ][0] { ${PROJECTION} }`,
+    { slug },
+  );
   return result ?? null;
 }
 
 export async function getAllFilings(): Promise<Filing[]> {
-  const query = `
-    *[_type == "filing"] | order(filingDate desc) {
-      ${PROJECTION}
-    }
-  `;
-  return filingsClient.fetch<Filing[]>(query);
+  return filingsClient.fetch<Filing[]>(
+    `*[_type == "filing"] | order(filingDate desc) { ${PROJECTION} }`,
+  );
 }
 
 // ─── UI helpers ─────────────────────────────────────────────────────
@@ -380,20 +354,13 @@ export function filingTypeColor(type: FilingType): string {
 
 export function filingTypeLabel(type: FilingType): string {
   switch (type) {
-    case "S-1":
-      return "Initial Registration";
-    case "S-1/A":
-      return "Amendment";
-    case "F-1":
-      return "Foreign Registration";
-    case "F-1/A":
-      return "Foreign Amendment";
-    case "424B":
-      return "Pricing";
-    case "RW":
-      return "Withdrawn";
-    default:
-      return type;
+    case "S-1": return "Initial Registration";
+    case "S-1/A": return "Amendment";
+    case "F-1": return "Foreign Registration";
+    case "F-1/A": return "Foreign Amendment";
+    case "424B": return "Pricing";
+    case "RW": return "Withdrawn";
+    default: return type;
   }
 }
 
@@ -425,17 +392,10 @@ export function formatMultiple(n: number | undefined): string {
 // ─── Pipeline classification ────────────────────────────────────────
 
 export type PipelineStage =
-  | "filed"
-  | "amended"
-  | "pricing"
-  | "trading"
-  | "withdrawn";
+  | "filed" | "amended" | "pricing" | "trading" | "withdrawn";
 
 export const PIPELINE_STAGES: PipelineStage[] = [
-  "filed",
-  "amended",
-  "pricing",
-  "trading",
+  "filed", "amended", "pricing", "trading",
 ];
 
 export const PIPELINE_STAGE_LABEL: Record<PipelineStage, string> = {
@@ -467,20 +427,14 @@ export function pipelineStage(f: Filing): PipelineStage {
   if (f.performance?.currentPrice || f.status === "trading") return "trading";
   if (f.filingType === "424B" || f.status === "pricing-window") return "pricing";
   if (
-    f.filingType === "S-1/A" ||
-    f.filingType === "F-1/A" ||
+    f.filingType === "S-1/A" || f.filingType === "F-1/A" ||
     f.status === "amended"
-  )
-    return "amended";
+  ) return "amended";
   return "filed";
 }
 
 const STAGE_RANK: Record<PipelineStage, number> = {
-  withdrawn: -1,
-  filed: 0,
-  amended: 1,
-  pricing: 2,
-  trading: 3,
+  withdrawn: -1, filed: 0, amended: 1, pricing: 2, trading: 3,
 };
 
 export function dedupeByCompany(filings: Filing[]): Filing[] {
@@ -489,18 +443,13 @@ export function dedupeByCompany(filings: Filing[]): Filing[] {
     const key = f.cik || f.reportSlug || f.companyName;
     if (!key) continue;
     const existing = byKey.get(key);
-    if (!existing) {
-      byKey.set(key, f);
-      continue;
-    }
+    if (!existing) { byKey.set(key, f); continue; }
     const a = STAGE_RANK[pipelineStage(existing)];
     const b = STAGE_RANK[pipelineStage(f)];
     if (b > a) {
       byKey.set(key, f);
     } else if (b === a) {
-      if ((f.filingDate || "") > (existing.filingDate || "")) {
-        byKey.set(key, f);
-      }
+      if ((f.filingDate || "") > (existing.filingDate || "")) byKey.set(key, f);
     }
   }
   return Array.from(byKey.values());
@@ -582,7 +531,6 @@ export function underwriterSlug(name: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-/** Returns true if filing has *any* financialsDeep data worth exporting. */
 export function hasFinancialsDeep(f: Filing): boolean {
   const fd = f.financialsDeep;
   if (!fd) return false;
@@ -592,4 +540,197 @@ export function hasFinancialsDeep(f: Filing): boolean {
     (fd.cashFlow?.length ?? 0) > 0 ||
     (fd.capTable?.length ?? 0) > 0
   );
+}
+
+// ─── Sector classification ──────────────────────────────────────────
+
+export type SectorSlug =
+  | "tech"
+  | "semiconductors"
+  | "biotech"
+  | "pharma"
+  | "fintech"
+  | "consumer"
+  | "industrial"
+  | "energy"
+  | "healthcare"
+  | "media"
+  | "other";
+
+export interface SectorDef {
+  slug: SectorSlug;
+  label: string;
+  description: string;
+  benchmarkEtf: string; // ticker for sector benchmark
+}
+
+export const SECTORS: SectorDef[] = [
+  {
+    slug: "tech",
+    label: "Software & Internet",
+    description:
+      "SaaS, cloud infrastructure, internet platforms, and digital marketplaces.",
+    benchmarkEtf: "XLK",
+  },
+  {
+    slug: "semiconductors",
+    label: "Semiconductors",
+    description:
+      "Chip design, foundry, equipment makers, and silicon-adjacent hardware.",
+    benchmarkEtf: "SOXX",
+  },
+  {
+    slug: "biotech",
+    label: "Biotech",
+    description:
+      "Clinical-stage and early commercial therapeutics, gene editing, diagnostics.",
+    benchmarkEtf: "XBI",
+  },
+  {
+    slug: "pharma",
+    label: "Pharmaceuticals",
+    description:
+      "Specialty and large-cap drug developers with marketed products.",
+    benchmarkEtf: "XPH",
+  },
+  {
+    slug: "fintech",
+    label: "Financial Services & Fintech",
+    description:
+      "Payments, lending, banking infrastructure, capital markets technology.",
+    benchmarkEtf: "XLF",
+  },
+  {
+    slug: "consumer",
+    label: "Consumer",
+    description:
+      "Consumer brands, retail, footwear, apparel, food & beverage.",
+    benchmarkEtf: "XLY",
+  },
+  {
+    slug: "industrial",
+    label: "Industrial",
+    description:
+      "Manufacturing, machinery, transportation, defense and aerospace.",
+    benchmarkEtf: "XLI",
+  },
+  {
+    slug: "energy",
+    label: "Energy",
+    description:
+      "Oil, gas, renewables, energy infrastructure and services.",
+    benchmarkEtf: "XLE",
+  },
+  {
+    slug: "healthcare",
+    label: "Healthcare",
+    description:
+      "Providers, payors, devices, healthcare IT.",
+    benchmarkEtf: "XLV",
+  },
+  {
+    slug: "media",
+    label: "Communications & Media",
+    description:
+      "Social platforms, streaming, telecom, advertising, content.",
+    benchmarkEtf: "XLC",
+  },
+];
+
+export function sectorLabel(slug: SectorSlug): string {
+  return SECTORS.find((s) => s.slug === slug)?.label || slug;
+}
+
+export function sectorEtf(slug: SectorSlug): string | undefined {
+  return SECTORS.find((s) => s.slug === slug)?.benchmarkEtf;
+}
+
+export function sectorDescription(slug: SectorSlug): string {
+  return SECTORS.find((s) => s.slug === slug)?.description || "";
+}
+
+/**
+ * Classify a filing into a canonical sector by keyword matching on
+ * `industry` (preferred) then falling back to `sicCode` major groups.
+ * Returns "other" if nothing matches.
+ */
+export function canonicalSector(f: Filing): SectorSlug {
+  const ind = (f.industry || "").toLowerCase();
+  const sic = (f.sicCode || "").toString();
+  const sicNum = parseInt(sic, 10);
+
+  // Semiconductors
+  if (
+    /semiconductor|chip|silicon|asic|fabless|foundry/.test(ind) ||
+    sic === "3674"
+  ) return "semiconductors";
+
+  // Biotech
+  if (
+    /biotech|bioscience|gene |genomic|therapeutic|clinical/.test(ind) ||
+    sic === "2836" || sic === "8731"
+  ) return "biotech";
+
+  // Pharma
+  if (
+    /pharma|drug|medicin/.test(ind) ||
+    sic === "2834" || sic === "2835"
+  ) return "pharma";
+
+  // Healthcare (providers, devices)
+  if (
+    /health|hospital|medical device|diagnostics|nursing/.test(ind) ||
+    (sicNum >= 8000 && sicNum <= 8099) ||
+    (sicNum >= 3840 && sicNum <= 3845)
+  ) return "healthcare";
+
+  // Fintech / financial
+  if (
+    /fintech|payment|bank|insur|capital markets|broker|lending|crypto|exchange/.test(ind) ||
+    (sicNum >= 6000 && sicNum <= 6799)
+  ) return "fintech";
+
+  // Media / communications
+  if (
+    /media|advertis|streaming|content|broadcasting|telecom|internet content|social/.test(ind) ||
+    (sicNum >= 2710 && sicNum <= 2790) ||
+    sic === "7812" ||
+    (sicNum >= 4810 && sicNum <= 4899)
+  ) return "media";
+
+  // Software & Internet
+  if (
+    /software|saas|cloud|internet|platform|marketplace|data/.test(ind) ||
+    (sicNum >= 7370 && sicNum <= 7379)
+  ) return "tech";
+
+  // Consumer
+  if (
+    /retail|consumer|apparel|footwear|food|beverage|restaurant|hospitality/.test(ind) ||
+    (sicNum >= 2000 && sicNum <= 2399) ||
+    (sicNum >= 3100 && sicNum <= 3199) ||
+    (sicNum >= 5000 && sicNum <= 5999) ||
+    (sicNum >= 5800 && sicNum <= 5899)
+  ) return "consumer";
+
+  // Energy
+  if (
+    /energy|oil|gas|renewable|solar|wind|battery|utility/.test(ind) ||
+    sic === "1311" || sic === "1381" ||
+    (sicNum >= 4900 && sicNum <= 4939)
+  ) return "energy";
+
+  // Industrial (catch-all manufacturing / transport)
+  if (
+    /industrial|manufactur|aerospace|defense|transport|machinery|construction|chemical|materials/.test(ind) ||
+    (sicNum >= 2400 && sicNum <= 2700) ||
+    (sicNum >= 2800 && sicNum <= 2899) ||
+    (sicNum >= 3300 && sicNum <= 3499) ||
+    (sicNum >= 3500 && sicNum <= 3590) ||
+    (sicNum >= 3600 && sicNum <= 3670) ||
+    (sicNum >= 3700 && sicNum <= 3799) ||
+    (sicNum >= 4000 && sicNum <= 4790)
+  ) return "industrial";
+
+  return "other";
 }
