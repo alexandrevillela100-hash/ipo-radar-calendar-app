@@ -7,10 +7,11 @@ import Compare from "@/pages/Compare";
 import Underwriters from "@/pages/Underwriters";
 import UnderwriterDetail from "@/pages/UnderwriterDetail";
 import Lockups from "@/pages/Lockups";
+import Sector from "@/pages/Sector";
 import CalendarNavbar from "@/components/CalendarNavbar";
 
 /**
- * App v4 — adds /compare, /underwriters, /underwriters/:slug, /lockups.
+ * App v5 — adds /sectors and /sector/:slug routes.
  *
  * Save as:  calendar-app/src/App.tsx (overwrite)
  *
@@ -23,6 +24,8 @@ import CalendarNavbar from "@/components/CalendarNavbar";
  *   /underwriters                → League table
  *   /underwriters/:slug          → Underwriter detail
  *   /lockups                     → Lockup expiration tracker
+ *   /sectors                     → Sectors index (uses Sector with no slug)
+ *   /sector/:slug                → Per-sector page
  */
 
 export default function App() {
@@ -38,6 +41,8 @@ export default function App() {
         <Route path="/underwriters" component={Underwriters} />
         <Route path="/underwriters/:slug" component={UnderwriterDetail} />
         <Route path="/lockups" component={Lockups} />
+        <Route path="/sectors" component={Sector} />
+        <Route path="/sector/:slug" component={Sector} />
         <Route>
           <div
             style={{
