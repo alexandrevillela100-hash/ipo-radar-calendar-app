@@ -16,23 +16,25 @@ import FactSheetChat from "@/components/FactSheetChat";
 import PerformanceSection from "@/components/PerformanceSection";
 import ComparablesSection from "@/components/ComparablesSection";
 import DownloadFinancialsButton from "@/components/DownloadFinancialsButton";
+import CompareWithButton from "@/components/CompareWithButton";
 import {
   getFilingBySlug,
   filingTypeColor,
   hasFinancialsDeep,
+  formatPct,
   type Filing,
 } from "@/lib/filingsClient";
+import { useDocumentMeta } from "@/lib/useDocumentMeta";
 
 /**
- * FactSheet — v7.
+ * FactSheet — v8.
  *
- * Save as:  calendar-app/src/pages/FactSheet.tsx (overwrite v6)
+ * Save as:  calendar-app/src/pages/FactSheet.tsx (overwrite v7)
  *
- * Changes from v6:
- *   - CTA bar shows Download Financials (XLSX) button when
- *     filing.financialsDeep is present.
- *   - CTA bar visibility broadens to also appear when XLSX is
- *     available (not just PDF or report link).
+ * Changes from v7:
+ *   - CompareWithButton dropdown in CTA bar
+ *   - useDocumentMeta hook sets <title>, og:image (via /api/og?slug=),
+ *     og:title, og:description, twitter:card per filing
  */
 
 const COLORS = {
@@ -116,6 +118,21 @@ function formatMoney(n: number | undefined): string {
   return `$${(n * 1000).toFixed(0)}K`;
 }
 
+function buildOgDescription(filing: Filing): string {
+  const bits: string[] = [];
+  if (filing.ticker) bits.push(filing.ticker);
+  if (filing.industry) bits.push(filing.industry);
+  bits.push(`${filing.filingType} filed ${shortDate(filing.filingDate)}`);
+  if (filing.performance?.returnSinceIPO !== undefined) {
+    bits.push(
+      `Since IPO ${formatPct(filing.performance.returnSinceIPO)}`,
+    );
+  } else if (filing.performance?.firstDayPop !== undefined) {
+    bits.push(`Day-1 pop ${formatPct(filing.performance.firstDayPop)}`);
+  }
+  return bits.join(" · ");
+}
+
 export default function FactSheet() {
   const [match, params] = useRoute("/fact-sheet/:slug");
   const slug = match ? params.slug : null;
@@ -155,6 +172,26 @@ export default function FactSheet() {
       cancelled = true;
     };
   }, [slug]);
+
+  // Set document meta + OG tags per filing
+  useDocumentMeta({
+    title: filing
+      ? `${filing.companyName}${filing.ticker ? ` (${filing.ticker})` : ""} — IPO Radar`
+      : "IPO Radar",
+    description: filing ? buildOgDescription(filing) : undefined,
+    ogTitle: filing
+      ? `${filing.companyName}${filing.ticker ? ` (${filing.ticker})` : ""}`
+      : undefined,
+    ogDescription: filing ? buildOgDescription(filing) : undefined,
+    ogImage:
+      filing && slug
+        ? `${typeof window !== "undefined" ? window.location.origin : ""}/api/og?slug=${encodeURIComponent(slug)}`
+        : undefined,
+    ogUrl:
+      filing && slug
+        ? `${typeof window !== "undefined" ? window.location.origin : ""}/fact-sheet/${encodeURIComponent(slug)}`
+        : undefined,
+  });
 
   if (loading) {
     return (
@@ -197,7 +234,8 @@ export default function FactSheet() {
     ? `/reports/${encodeURIComponent(filing.reportSlug)}`
     : null;
   const xlsxAvailable = hasFinancialsDeep(filing);
-  const showCta = !!(pdfUrl || fullReportHref || xlsxAvailable);
+  // CTA always shows now that Compare button can live there
+  const showCta = true;
 
   return (
     <div style={pageStyle}>
@@ -601,12 +639,12 @@ export default function FactSheet() {
                   marginTop: "6px",
                 }}
               >
-                {xlsxAvailable
-                  ? "Download the full financial workbook (Excel), the 30-page initiation report (PDF), or read it online."
-                  : "Download the full 30-page initiation report, or read it online."}
+                Compare to another IPO, download the financial workbook, or
+                read the full 30-page report.
               </div>
             </div>
             <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+              <CompareWithButton currentFiling={filing} />
               {xlsxAvailable ? (
                 <DownloadFinancialsButton filing={filing} variant="primary" />
               ) : null}
@@ -635,7 +673,7 @@ export default function FactSheet() {
                   Download PDF
                 </a>
               ) : null}
-              {fullReportHref ? (
+              {fullReportHref && pdfUrl ? (
                 <Link
                   href={fullReportHref}
                   style={{
