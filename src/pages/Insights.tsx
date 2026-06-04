@@ -66,12 +66,6 @@ const containerStyle: CSSProperties = {
 
 const MONTHS_BACK = 12; // trailing 12 months on the X axis
 
-function shortMonth(ymd: string): string | null {
-  const d = new Date(ymd);
-  if (isNaN(d.getTime())) return null;
-  return d.toLocaleDateString("en-US", { month: "short" }) + " " + String(d.getFullYear()).slice(2);
-}
-
 function monthKey(ymd: string): string | null {
   const d = new Date(ymd);
   if (isNaN(d.getTime())) return null;
