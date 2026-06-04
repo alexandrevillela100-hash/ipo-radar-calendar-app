@@ -17,24 +17,27 @@ import PerformanceSection from "@/components/PerformanceSection";
 import ComparablesSection from "@/components/ComparablesSection";
 import DownloadFinancialsButton from "@/components/DownloadFinancialsButton";
 import CompareWithButton from "@/components/CompareWithButton";
+import StarButton from "@/components/StarButton";
+import AmendmentDiffSection from "@/components/AmendmentDiffSection";
 import {
   getFilingBySlug,
   filingTypeColor,
   hasFinancialsDeep,
+  hasAmendmentDiff,
   formatPct,
   type Filing,
 } from "@/lib/filingsClient";
 import { useDocumentMeta } from "@/lib/useDocumentMeta";
 
 /**
- * FactSheet — v8.
+ * FactSheet — v9.
  *
- * Save as:  calendar-app/src/pages/FactSheet.tsx (overwrite v7)
+ * Save as:  calendar-app/src/pages/FactSheet.tsx (overwrite v8)
  *
- * Changes from v7:
- *   - CompareWithButton dropdown in CTA bar
- *   - useDocumentMeta hook sets <title>, og:image (via /api/og?slug=),
- *     og:title, og:description, twitter:card per filing
+ * Changes from v8:
+ *   - Adds StarButton (chip variant) into the CTA bar
+ *   - Adds AmendmentDiffSection between Performance and The Offering
+ *     when filing.amendmentDiff exists
  */
 
 const COLORS = {
@@ -124,9 +127,7 @@ function buildOgDescription(filing: Filing): string {
   if (filing.industry) bits.push(filing.industry);
   bits.push(`${filing.filingType} filed ${shortDate(filing.filingDate)}`);
   if (filing.performance?.returnSinceIPO !== undefined) {
-    bits.push(
-      `Since IPO ${formatPct(filing.performance.returnSinceIPO)}`,
-    );
+    bits.push(`Since IPO ${formatPct(filing.performance.returnSinceIPO)}`);
   } else if (filing.performance?.firstDayPop !== undefined) {
     bits.push(`Day-1 pop ${formatPct(filing.performance.firstDayPop)}`);
   }
@@ -173,7 +174,6 @@ export default function FactSheet() {
     };
   }, [slug]);
 
-  // Set document meta + OG tags per filing
   useDocumentMeta({
     title: filing
       ? `${filing.companyName}${filing.ticker ? ` (${filing.ticker})` : ""} — IPO Radar`
@@ -196,13 +196,7 @@ export default function FactSheet() {
   if (loading) {
     return (
       <div style={pageStyle}>
-        <div
-          style={{
-            ...containerStyle,
-            padding: "120px 32px",
-            color: COLORS.fgMuted,
-          }}
-        >
+        <div style={{ ...containerStyle, padding: "120px 32px", color: COLORS.fgMuted }}>
           Loading…
         </div>
       </div>
@@ -212,13 +206,7 @@ export default function FactSheet() {
   if (error || !filing) {
     return (
       <div style={pageStyle}>
-        <div
-          style={{
-            ...containerStyle,
-            padding: "120px 32px",
-            color: COLORS.fgMuted,
-          }}
-        >
+        <div style={{ ...containerStyle, padding: "120px 32px", color: COLORS.fgMuted }}>
           {error ? `Error: ${error}` : "Filing not found."}
         </div>
       </div>
@@ -234,8 +222,6 @@ export default function FactSheet() {
     ? `/reports/${encodeURIComponent(filing.reportSlug)}`
     : null;
   const xlsxAvailable = hasFinancialsDeep(filing);
-  // CTA always shows now that Compare button can live there
-  const showCta = true;
 
   return (
     <div style={pageStyle}>
@@ -274,6 +260,18 @@ export default function FactSheet() {
               pointerEvents: "none",
             }}
           />
+
+          {/* Star button in top-right corner */}
+          <div
+            style={{
+              position: "absolute",
+              top: 84,
+              right: 32,
+              zIndex: 2,
+            }}
+          >
+            <StarButton slug={filing.reportSlug} variant="chip" size={14} />
+          </div>
 
           <div
             style={{
@@ -333,9 +331,7 @@ export default function FactSheet() {
                   {filing.exchange && filing.exchange !== "UNKNOWN"
                     ? `${filing.exchange}: `
                     : ""}
-                  <span style={{ color: COLORS.primary }}>
-                    {filing.ticker}
-                  </span>
+                  <span style={{ color: COLORS.primary }}>{filing.ticker}</span>
                 </span>
               ) : null}
               {filing.industry ? <span>· {filing.industry}</span> : null}
@@ -345,7 +341,7 @@ export default function FactSheet() {
         </div>
       </section>
 
-      {/* ── Quick facts ────────────────────────────────────────── */}
+      {/* Quick facts */}
       <section
         style={{
           borderTop: `1px solid ${COLORS.border}`,
@@ -362,16 +358,8 @@ export default function FactSheet() {
             gap: "24px 32px",
           }}
         >
-          <QuickFact
-            icon={<Building2 size={14} />}
-            label="Exchange"
-            value={filing.exchange || "—"}
-          />
-          <QuickFact
-            icon={<CalendarIcon size={14} />}
-            label="Filed"
-            value={shortDate(filing.filingDate)}
-          />
+          <QuickFact icon={<Building2 size={14} />} label="Exchange" value={filing.exchange || "—"} />
+          <QuickFact icon={<CalendarIcon size={14} />} label="Filed" value={shortDate(filing.filingDate)} />
           <QuickFact
             icon={<DollarSign size={14} />}
             label="Gross proceeds"
@@ -385,34 +373,25 @@ export default function FactSheet() {
         </div>
       </section>
 
-      {/* ── Performance ────────────────────────────────────────── */}
+      {/* Performance */}
       {filing.performance ? <PerformanceSection filing={filing} /> : null}
 
-      {/* ── The Offering ───────────────────────────────────────── */}
+      {/* Amendment diff (NEW) */}
+      {hasAmendmentDiff(filing) ? <AmendmentDiffSection filing={filing} /> : null}
+
+      {/* The Offering */}
       {offering ? (
         <Section eyebrow="The Offering" title="Deal terms.">
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr",
-              gap: "10px 48px",
-            }}
-          >
+          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "10px 48px" }}>
             <DataRow label="Shares offered" value={formatMoney(offering.sharesOfferedM)} />
             <DataRow label="Price range" value={offering.priceRange || "—"} />
-            <DataRow
-              label="Gross proceeds"
-              value={formatMoney(offering.grossProceedsM)}
-            />
-            <DataRow
-              label="Implied valuation"
-              value={formatMoney(offering.impliedValuationM)}
-            />
+            <DataRow label="Gross proceeds" value={formatMoney(offering.grossProceedsM)} />
+            <DataRow label="Implied valuation" value={formatMoney(offering.impliedValuationM)} />
           </div>
         </Section>
       ) : null}
 
-      {/* ── Use of Proceeds ────────────────────────────────────── */}
+      {/* Use of Proceeds */}
       {filing.useOfProceeds && filing.useOfProceeds.length > 0 ? (
         <Section eyebrow="Use of Proceeds" title="Where the money goes.">
           <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -448,7 +427,7 @@ export default function FactSheet() {
         </Section>
       ) : null}
 
-      {/* ── Key Risks ──────────────────────────────────────────── */}
+      {/* Key Risks */}
       {filing.keyRisks && filing.keyRisks.length > 0 ? (
         <Section eyebrow="Key Risks" title="What could go wrong.">
           <div
@@ -471,19 +450,8 @@ export default function FactSheet() {
                   gap: "12px",
                 }}
               >
-                <AlertTriangle
-                  size={16}
-                  style={{ color: COLORS.gold, flexShrink: 0, marginTop: 2 }}
-                />
-                <span
-                  style={{
-                    fontFamily: FONTS.sans,
-                    fontSize: "13px",
-                    color: COLORS.fg,
-                    fontWeight: 300,
-                    lineHeight: 1.55,
-                  }}
-                >
+                <AlertTriangle size={16} style={{ color: COLORS.gold, flexShrink: 0, marginTop: 2 }} />
+                <span style={{ fontFamily: FONTS.sans, fontSize: "13px", color: COLORS.fg, fontWeight: 300, lineHeight: 1.55 }}>
                   {risk}
                 </span>
               </div>
@@ -492,7 +460,7 @@ export default function FactSheet() {
         </Section>
       ) : null}
 
-      {/* ── Financial Snapshot ─────────────────────────────────── */}
+      {/* Financial Snapshot */}
       {financials?.history && financials.history.length > 0 ? (
         <Section eyebrow="Financial Snapshot" title="Three-year history.">
           <div
@@ -509,30 +477,18 @@ export default function FactSheet() {
               <thead>
                 <tr style={{ color: COLORS.fgMuted, fontSize: "11px" }}>
                   <th style={{ textAlign: "left", padding: "6px 12px" }}>FY</th>
-                  <th style={{ textAlign: "right", padding: "6px 12px" }}>
-                    Revenue
-                  </th>
-                  <th style={{ textAlign: "right", padding: "6px 12px" }}>
-                    Gross profit
-                  </th>
-                  <th style={{ textAlign: "right", padding: "6px 12px" }}>
-                    Net income
-                  </th>
+                  <th style={{ textAlign: "right", padding: "6px 12px" }}>Revenue</th>
+                  <th style={{ textAlign: "right", padding: "6px 12px" }}>Gross profit</th>
+                  <th style={{ textAlign: "right", padding: "6px 12px" }}>Net income</th>
                 </tr>
               </thead>
               <tbody>
                 {financials.history.map((row, i) => (
                   <tr key={i} style={{ color: COLORS.fg }}>
                     <td style={{ padding: "8px 12px" }}>{row.fy}</td>
-                    <td style={{ padding: "8px 12px", textAlign: "right" }}>
-                      {formatMoney(row.revenueM)}
-                    </td>
-                    <td style={{ padding: "8px 12px", textAlign: "right" }}>
-                      {formatMoney(row.grossProfitM)}
-                    </td>
-                    <td style={{ padding: "8px 12px", textAlign: "right" }}>
-                      {formatMoney(row.netIncomeM)}
-                    </td>
+                    <td style={{ padding: "8px 12px", textAlign: "right" }}>{formatMoney(row.revenueM)}</td>
+                    <td style={{ padding: "8px 12px", textAlign: "right" }}>{formatMoney(row.grossProfitM)}</td>
+                    <td style={{ padding: "8px 12px", textAlign: "right" }}>{formatMoney(row.netIncomeM)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -541,22 +497,14 @@ export default function FactSheet() {
         </Section>
       ) : null}
 
-      {/* ── Comparables ────────────────────────────────────────── */}
-      {filing.comps && filing.comps.length > 0 ? (
-        <ComparablesSection filing={filing} />
-      ) : null}
+      {/* Comparables */}
+      {filing.comps && filing.comps.length > 0 ? <ComparablesSection filing={filing} /> : null}
 
-      {/* ── Bankers & Peers ────────────────────────────────────── */}
+      {/* Bankers & Peers */}
       {(filing.leadUnderwriters && filing.leadUnderwriters.length > 0) ||
       (filing.comparables && filing.comparables.length > 0) ? (
         <Section eyebrow="Bankers & Peers" title="Who's on the deal.">
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "32px",
-            }}
-          >
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "32px" }}>
             {filing.leadUnderwriters && filing.leadUnderwriters.length > 0 ? (
               <div>
                 <div style={subTitleStyle}>Lead underwriters</div>
@@ -609,105 +557,98 @@ export default function FactSheet() {
         </Section>
       ) : null}
 
-      {/* ── CTA bar ────────────────────────────────────────────── */}
-      {showCta ? (
-        <section
+      {/* CTA bar */}
+      <section
+        style={{
+          borderTop: `1px solid ${COLORS.border}`,
+          background: "rgba(19,24,32,0.4)",
+        }}
+      >
+        <div
           style={{
-            borderTop: `1px solid ${COLORS.border}`,
-            background: "rgba(19,24,32,0.4)",
+            ...containerStyle,
+            padding: "32px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "20px",
+            flexWrap: "wrap",
           }}
         >
-          <div
-            style={{
-              ...containerStyle,
-              padding: "32px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: "20px",
-              flexWrap: "wrap",
-            }}
-          >
-            <div>
-              <div style={eyebrowStyle}>Go deeper</div>
-              <div
-                style={{
-                  fontFamily: FONTS.sans,
-                  fontSize: "14px",
-                  color: COLORS.fgMuted,
-                  fontWeight: 300,
-                  marginTop: "6px",
-                }}
-              >
-                Compare to another IPO, download the financial workbook, or
-                read the full 30-page report.
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-              <CompareWithButton currentFiling={filing} />
-              {xlsxAvailable ? (
-                <DownloadFinancialsButton filing={filing} variant="primary" />
-              ) : null}
-              {pdfUrl ? (
-                <a
-                  href={pdfUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    padding: "12px 18px",
-                    background: COLORS.primary,
-                    color: "#001512",
-                    fontFamily: FONTS.mono,
-                    fontSize: "11px",
-                    letterSpacing: "0.16em",
-                    textTransform: "uppercase",
-                    fontWeight: 600,
-                    textDecoration: "none",
-                    borderRadius: "4px",
-                  }}
-                >
-                  <Download size={14} />
-                  Download PDF
-                </a>
-              ) : null}
-              {fullReportHref && pdfUrl ? (
-                <Link
-                  href={fullReportHref}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    padding: "12px 18px",
-                    background: "transparent",
-                    color: COLORS.fg,
-                    fontFamily: FONTS.mono,
-                    fontSize: "11px",
-                    letterSpacing: "0.16em",
-                    textTransform: "uppercase",
-                    border: `1px solid ${COLORS.border}`,
-                    textDecoration: "none",
-                    borderRadius: "4px",
-                  }}
-                >
-                  Read full report
-                  <ExternalLink size={12} />
-                </Link>
-              ) : null}
+          <div>
+            <div style={eyebrowStyle}>Go deeper</div>
+            <div
+              style={{
+                fontFamily: FONTS.sans,
+                fontSize: "14px",
+                color: COLORS.fgMuted,
+                fontWeight: 300,
+                marginTop: "6px",
+              }}
+            >
+              Save this name, compare to another IPO, download the financial workbook, or read the full report.
             </div>
           </div>
-        </section>
-      ) : null}
+          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
+            <StarButton slug={filing.reportSlug} variant="chip" size={14} />
+            <CompareWithButton currentFiling={filing} />
+            {xlsxAvailable ? <DownloadFinancialsButton filing={filing} variant="primary" /> : null}
+            {pdfUrl ? (
+              <a
+                href={pdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "12px 18px",
+                  background: COLORS.primary,
+                  color: "#001512",
+                  fontFamily: FONTS.mono,
+                  fontSize: "11px",
+                  letterSpacing: "0.16em",
+                  textTransform: "uppercase",
+                  fontWeight: 600,
+                  textDecoration: "none",
+                  borderRadius: "4px",
+                }}
+              >
+                <Download size={14} />
+                Download PDF
+              </a>
+            ) : null}
+            {fullReportHref && pdfUrl ? (
+              <Link
+                href={fullReportHref}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "12px 18px",
+                  background: "transparent",
+                  color: COLORS.fg,
+                  fontFamily: FONTS.mono,
+                  fontSize: "11px",
+                  letterSpacing: "0.16em",
+                  textTransform: "uppercase",
+                  border: `1px solid ${COLORS.border}`,
+                  textDecoration: "none",
+                  borderRadius: "4px",
+                }}
+              >
+                Read full report
+                <ExternalLink size={12} />
+              </Link>
+            ) : null}
+          </div>
+        </div>
+      </section>
 
-      {/* ── Analyst chat ───────────────────────────────────────── */}
       <FactSheetChat filing={filing} />
     </div>
   );
 }
-
-// ─── Sub-components ─────────────────────────────────────────────────
 
 function Section({
   eyebrow,
