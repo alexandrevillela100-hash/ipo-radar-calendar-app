@@ -1,18 +1,16 @@
 // ============================================================================
-//  filingsClient.ts — v6 (adds sector classification)
+//  filingsClient.ts — v7 (adds amendmentDiff schema)
 //
-//  Save as:  calendar-app/src/lib/filingsClient.ts (overwrite v5)
+//  Save as:  calendar-app/src/lib/filingsClient.ts (overwrite v6)
 //
-//  Changes from v5:
-//    - SECTORS constant — 10 canonical sectors with labels, descriptions,
-//      and benchmark ETF tickers
-//    - canonicalSector(filing) — maps a filing to a sector slug
-//    - sectorLabel(slug), sectorEtf(slug), sectorDescription(slug)
+//  Changes from v6:
+//    - AmendmentDiff interface + Filing.amendmentDiff field
+//    - GROQ projection passes through amendmentDiff
+//    - amendmentChangeCategoryColor() helper
+//    - hasAmendmentDiff() guard
 // ============================================================================
 
 import { createClient, type SanityClient } from "@sanity/client";
-
-// ─── Sanity client setup ────────────────────────────────────────────
 
 const projectId = import.meta.env.VITE_SANITY_PROJECT_ID as string;
 const dataset =
@@ -38,19 +36,10 @@ export const filingsClient: SanityClient = createClient({
 // ─── Types ──────────────────────────────────────────────────────────
 
 export type FilingType =
-  | "S-1"
-  | "S-1/A"
-  | "F-1"
-  | "F-1/A"
-  | "424B"
-  | "RW";
+  | "S-1" | "S-1/A" | "F-1" | "F-1/A" | "424B" | "RW";
 
 export type FilingStatus =
-  | "pre-pricing"
-  | "amended"
-  | "pricing-window"
-  | "trading"
-  | "withdrawn";
+  | "pre-pricing" | "amended" | "pricing-window" | "trading" | "withdrawn";
 
 export interface PricingInfo {
   ipoDate?: string;
@@ -88,91 +77,77 @@ export interface CompCompany {
 
 export interface PnLRow {
   fy: string;
-  revenue?: number;
-  costOfRevenue?: number;
-  grossProfit?: number;
-  researchDev?: number;
-  salesMarketing?: number;
-  generalAdmin?: number;
-  totalOpex?: number;
-  operatingIncome?: number;
-  interestNet?: number;
-  otherIncome?: number;
-  preTaxIncome?: number;
-  tax?: number;
-  netIncome?: number;
-  basicEPS?: number;
-  dilutedEPS?: number;
+  revenue?: number; costOfRevenue?: number; grossProfit?: number;
+  researchDev?: number; salesMarketing?: number; generalAdmin?: number;
+  totalOpex?: number; operatingIncome?: number; interestNet?: number;
+  otherIncome?: number; preTaxIncome?: number; tax?: number;
+  netIncome?: number; basicEPS?: number; dilutedEPS?: number;
 }
-
 export interface BalanceSheetRow {
   fy: string;
-  cashEquivalents?: number;
-  shortTermInvestments?: number;
-  accountsReceivable?: number;
-  inventory?: number;
-  otherCurrentAssets?: number;
-  totalCurrentAssets?: number;
-  propertyEquipment?: number;
-  goodwill?: number;
-  intangibles?: number;
-  otherLTAssets?: number;
-  totalAssets?: number;
-  accountsPayable?: number;
-  accruedLiabilities?: number;
-  currentDebt?: number;
-  deferredRevenueCurrent?: number;
-  totalCurrentLiabilities?: number;
-  longTermDebt?: number;
-  otherLTLiabilities?: number;
-  totalLiabilities?: number;
-  commonStock?: number;
-  additionalPaidInCapital?: number;
-  accumulatedDeficit?: number;
-  totalEquity?: number;
+  cashEquivalents?: number; shortTermInvestments?: number;
+  accountsReceivable?: number; inventory?: number; otherCurrentAssets?: number;
+  totalCurrentAssets?: number; propertyEquipment?: number; goodwill?: number;
+  intangibles?: number; otherLTAssets?: number; totalAssets?: number;
+  accountsPayable?: number; accruedLiabilities?: number; currentDebt?: number;
+  deferredRevenueCurrent?: number; totalCurrentLiabilities?: number;
+  longTermDebt?: number; otherLTLiabilities?: number; totalLiabilities?: number;
+  commonStock?: number; additionalPaidInCapital?: number;
+  accumulatedDeficit?: number; totalEquity?: number;
 }
-
 export interface CashFlowRow {
   fy: string;
-  netIncome?: number;
-  depreciationAmort?: number;
-  stockBasedComp?: number;
-  workingCapital?: number;
-  otherOperating?: number;
-  cfo?: number;
-  capex?: number;
-  acquisitions?: number;
-  otherInvesting?: number;
-  cfi?: number;
-  stockIssuance?: number;
-  stockBuybacks?: number;
-  debtNet?: number;
-  dividends?: number;
-  otherFinancing?: number;
-  cff?: number;
-  netChangeInCash?: number;
+  netIncome?: number; depreciationAmort?: number; stockBasedComp?: number;
+  workingCapital?: number; otherOperating?: number; cfo?: number;
+  capex?: number; acquisitions?: number; otherInvesting?: number;
+  cfi?: number; stockIssuance?: number; stockBuybacks?: number;
+  debtNet?: number; dividends?: number; otherFinancing?: number;
+  cff?: number; netChangeInCash?: number;
 }
-
 export interface CapTableRow {
   holder: string;
   holderType?: "founder" | "investor" | "employee" | "ipo-float" | "other";
-  sharesM?: number;
-  pctPreIPO?: number;
-  pctPostIPO?: number;
-  lockupDays?: number;
-  notes?: string;
+  sharesM?: number; pctPreIPO?: number; pctPostIPO?: number;
+  lockupDays?: number; notes?: string;
+}
+export interface FinancialsDeep {
+  currency?: string; fiscalYearEnd?: string; source?: string;
+  lastUpdated?: string;
+  pnl?: PnLRow[]; balanceSheet?: BalanceSheetRow[];
+  cashFlow?: CashFlowRow[]; capTable?: CapTableRow[];
 }
 
-export interface FinancialsDeep {
-  currency?: string;
-  fiscalYearEnd?: string;
-  source?: string;
-  lastUpdated?: string;
-  pnl?: PnLRow[];
-  balanceSheet?: BalanceSheetRow[];
-  cashFlow?: CashFlowRow[];
-  capTable?: CapTableRow[];
+// ─── Amendment diff ─────────────────────────────────────────────────
+
+export type AmendmentChangeCategory =
+  | "Offering size"
+  | "Price range"
+  | "Share count"
+  | "Underwriters"
+  | "Risk factors"
+  | "Use of proceeds"
+  | "Financials"
+  | "Lockup terms"
+  | "Insider sale"
+  | "Other";
+
+export interface AmendmentChange {
+  category: AmendmentChangeCategory | string;
+  direction: "added" | "removed" | "changed";
+  description: string;
 }
+
+export interface AmendmentDiff {
+  comparedAt?: string; // ISO timestamp
+  priorFilingType?: string; // e.g. "S-1"
+  priorFilingDate?: string; // ISO date
+  priorAccessionNumber?: string;
+  summary?: string; // one-sentence overview
+  changes?: AmendmentChange[];
+  source?: string; // e.g. "claude-haiku-4-5"
+}
+
+// ─── Filing ─────────────────────────────────────────────────────────
 
 export interface Filing {
   _id: string;
@@ -199,10 +174,8 @@ export interface Filing {
   pdfReportUrl?: string;
 
   offering?: {
-    sharesOfferedM?: number;
-    priceRange?: string;
-    grossProceedsM?: number;
-    impliedValuationM?: number;
+    sharesOfferedM?: number; priceRange?: string;
+    grossProceedsM?: number; impliedValuationM?: number;
   };
 
   leadUnderwriters?: string[];
@@ -215,95 +188,57 @@ export interface Filing {
     lastRevenueM?: number;
     history?: Array<{
       fy: string;
-      revenueM?: number;
-      grossProfitM?: number;
-      netIncomeM?: number;
+      revenueM?: number; grossProfitM?: number; netIncomeM?: number;
     }>;
   };
 
   financialsDeep?: FinancialsDeep;
+  amendmentDiff?: AmendmentDiff;
   comparables?: string[];
 }
 
 // ─── GROQ projection ────────────────────────────────────────────────
 const PROJECTION = /* groq */ `
-  _id,
-  companyName,
-  ticker,
-  exchange,
-  industry,
-  sicCode,
-  filingType,
-  filingDate,
-  status,
-  cik,
-  accessionNumber,
-  edgarUrl,
-  reportSlug,
-  pricing,
-  performance,
-  compTickers,
-  comps,
-  financialsDeep,
+  _id, companyName, ticker, exchange, industry, sicCode,
+  filingType, filingDate, status, cik, accessionNumber, edgarUrl, reportSlug,
+  pricing, performance, compTickers, comps, financialsDeep, amendmentDiff,
   "heroImageUrl": *[
-    _type == "initiationReport"
-    && defined(^.reportSlug)
-    && slug.current == ^.reportSlug
-    && status == "published"
+    _type == "initiationReport" && defined(^.reportSlug)
+    && slug.current == ^.reportSlug && status == "published"
   ][0].heroImage.asset->url,
   "pdfReportUrl": *[
-    _type == "initiationReport"
-    && defined(^.reportSlug)
-    && slug.current == ^.reportSlug
-    && status == "published"
+    _type == "initiationReport" && defined(^.reportSlug)
+    && slug.current == ^.reportSlug && status == "published"
   ][0].pdfFile.asset->url,
   "offering": *[
-    _type == "initiationReport"
-    && defined(^.reportSlug)
-    && slug.current == ^.reportSlug
-    && status == "published"
+    _type == "initiationReport" && defined(^.reportSlug)
+    && slug.current == ^.reportSlug && status == "published"
   ][0].offering,
   "useOfProceeds": *[
-    _type == "initiationReport"
-    && defined(^.reportSlug)
-    && slug.current == ^.reportSlug
-    && status == "published"
+    _type == "initiationReport" && defined(^.reportSlug)
+    && slug.current == ^.reportSlug && status == "published"
   ][0].useOfProceeds,
   "keyRisks": *[
-    _type == "initiationReport"
-    && defined(^.reportSlug)
-    && slug.current == ^.reportSlug
-    && status == "published"
+    _type == "initiationReport" && defined(^.reportSlug)
+    && slug.current == ^.reportSlug && status == "published"
   ][0].keyRisks,
   "financials": *[
-    _type == "initiationReport"
-    && defined(^.reportSlug)
-    && slug.current == ^.reportSlug
-    && status == "published"
+    _type == "initiationReport" && defined(^.reportSlug)
+    && slug.current == ^.reportSlug && status == "published"
   ][0].financials,
   "leadUnderwriters": coalesce(
     leadUnderwriters,
-    *[
-      _type == "initiationReport"
-      && defined(^.reportSlug)
-      && slug.current == ^.reportSlug
-      && status == "published"
-    ][0].leadUnderwriters
+    *[_type == "initiationReport" && defined(^.reportSlug)
+      && slug.current == ^.reportSlug && status == "published"][0].leadUnderwriters
   ),
   "grossProceedsM": coalesce(
     grossProceedsM,
-    *[
-      _type == "initiationReport"
-      && defined(^.reportSlug)
-      && slug.current == ^.reportSlug
-      && status == "published"
-    ][0].offering.grossProceedsM
+    *[_type == "initiationReport" && defined(^.reportSlug)
+      && slug.current == ^.reportSlug && status == "published"][0].offering.grossProceedsM
   ),
   "comparables": *[
-    _type == "initiationReport"
-    && defined(^.reportSlug)
-    && slug.current == ^.reportSlug
-    && status == "published"
+    _type == "initiationReport" && defined(^.reportSlug)
+    && slug.current == ^.reportSlug && status == "published"
   ][0].comparables
 `;
 
@@ -318,10 +253,7 @@ export async function getRecentFilings(limit = 30): Promise<Filing[]> {
 
 export async function getFilingBySlug(slug: string): Promise<Filing | null> {
   const result = await filingsClient.fetch<Filing | null>(
-    `*[
-      _type == "filing"
-      && (reportSlug == $slug || slug.current == $slug)
-    ][0] { ${PROJECTION} }`,
+    `*[_type == "filing" && (reportSlug == $slug || slug.current == $slug)][0] { ${PROJECTION} }`,
     { slug },
   );
   return result ?? null;
@@ -333,22 +265,31 @@ export async function getAllFilings(): Promise<Filing[]> {
   );
 }
 
+/** Load multiple filings by reportSlug list (preserves order). */
+export async function getFilingsBySlugs(slugs: string[]): Promise<Filing[]> {
+  if (slugs.length === 0) return [];
+  const rows = await filingsClient.fetch<Filing[]>(
+    `*[_type == "filing" && reportSlug in $slugs] { ${PROJECTION} }`,
+    { slugs },
+  );
+  const bySlug = new Map(rows.map((r) => [r.reportSlug, r]));
+  const ordered: Filing[] = [];
+  for (const s of slugs) {
+    const f = bySlug.get(s);
+    if (f) ordered.push(f);
+  }
+  return ordered;
+}
+
 // ─── UI helpers ─────────────────────────────────────────────────────
 
 export function filingTypeColor(type: FilingType): string {
   switch (type) {
-    case "S-1":
-    case "F-1":
-      return "#03c8b5";
-    case "S-1/A":
-    case "F-1/A":
-      return "#c8a45c";
-    case "424B":
-      return "#7a89d8";
-    case "RW":
-      return "#d86060";
-    default:
-      return "#8b9099";
+    case "S-1": case "F-1": return "#03c8b5";
+    case "S-1/A": case "F-1/A": return "#c8a45c";
+    case "424B": return "#7a89d8";
+    case "RW": return "#d86060";
+    default: return "#8b9099";
   }
 }
 
@@ -399,11 +340,8 @@ export const PIPELINE_STAGES: PipelineStage[] = [
 ];
 
 export const PIPELINE_STAGE_LABEL: Record<PipelineStage, string> = {
-  filed: "Filed",
-  amended: "Amended",
-  pricing: "Pricing window",
-  trading: "Trading",
-  withdrawn: "Withdrawn",
+  filed: "Filed", amended: "Amended", pricing: "Pricing window",
+  trading: "Trading", withdrawn: "Withdrawn",
 };
 
 export const PIPELINE_STAGE_DESCRIPTION: Record<PipelineStage, string> = {
@@ -415,11 +353,8 @@ export const PIPELINE_STAGE_DESCRIPTION: Record<PipelineStage, string> = {
 };
 
 export const PIPELINE_STAGE_COLOR: Record<PipelineStage, string> = {
-  filed: "#03c8b5",
-  amended: "#c8a45c",
-  pricing: "#7a89d8",
-  trading: "#56c490",
-  withdrawn: "#d86060",
+  filed: "#03c8b5", amended: "#c8a45c", pricing: "#7a89d8",
+  trading: "#56c490", withdrawn: "#d86060",
 };
 
 export function pipelineStage(f: Filing): PipelineStage {
@@ -542,99 +477,56 @@ export function hasFinancialsDeep(f: Filing): boolean {
   );
 }
 
+export function hasAmendmentDiff(f: Filing): boolean {
+  const d = f.amendmentDiff;
+  if (!d) return false;
+  return Boolean(d.summary) || (d.changes?.length ?? 0) > 0;
+}
+
+export function amendmentChangeColor(category: string): string {
+  switch (category) {
+    case "Offering size":
+    case "Price range":
+    case "Share count":
+      return "#c8a45c"; // gold — economic terms
+    case "Risk factors":
+      return "#d86060"; // red — risk shifts
+    case "Underwriters":
+    case "Lockup terms":
+    case "Insider sale":
+      return "#7a89d8"; // indigo — structural
+    case "Use of proceeds":
+    case "Financials":
+      return "#03c8b5"; // teal — substantive
+    default:
+      return "#8b9099"; // muted
+  }
+}
+
 // ─── Sector classification ──────────────────────────────────────────
 
 export type SectorSlug =
-  | "tech"
-  | "semiconductors"
-  | "biotech"
-  | "pharma"
-  | "fintech"
-  | "consumer"
-  | "industrial"
-  | "energy"
-  | "healthcare"
-  | "media"
-  | "other";
+  | "tech" | "semiconductors" | "biotech" | "pharma" | "fintech"
+  | "consumer" | "industrial" | "energy" | "healthcare" | "media" | "other";
 
 export interface SectorDef {
   slug: SectorSlug;
   label: string;
   description: string;
-  benchmarkEtf: string; // ticker for sector benchmark
+  benchmarkEtf: string;
 }
 
 export const SECTORS: SectorDef[] = [
-  {
-    slug: "tech",
-    label: "Software & Internet",
-    description:
-      "SaaS, cloud infrastructure, internet platforms, and digital marketplaces.",
-    benchmarkEtf: "XLK",
-  },
-  {
-    slug: "semiconductors",
-    label: "Semiconductors",
-    description:
-      "Chip design, foundry, equipment makers, and silicon-adjacent hardware.",
-    benchmarkEtf: "SOXX",
-  },
-  {
-    slug: "biotech",
-    label: "Biotech",
-    description:
-      "Clinical-stage and early commercial therapeutics, gene editing, diagnostics.",
-    benchmarkEtf: "XBI",
-  },
-  {
-    slug: "pharma",
-    label: "Pharmaceuticals",
-    description:
-      "Specialty and large-cap drug developers with marketed products.",
-    benchmarkEtf: "XPH",
-  },
-  {
-    slug: "fintech",
-    label: "Financial Services & Fintech",
-    description:
-      "Payments, lending, banking infrastructure, capital markets technology.",
-    benchmarkEtf: "XLF",
-  },
-  {
-    slug: "consumer",
-    label: "Consumer",
-    description:
-      "Consumer brands, retail, footwear, apparel, food & beverage.",
-    benchmarkEtf: "XLY",
-  },
-  {
-    slug: "industrial",
-    label: "Industrial",
-    description:
-      "Manufacturing, machinery, transportation, defense and aerospace.",
-    benchmarkEtf: "XLI",
-  },
-  {
-    slug: "energy",
-    label: "Energy",
-    description:
-      "Oil, gas, renewables, energy infrastructure and services.",
-    benchmarkEtf: "XLE",
-  },
-  {
-    slug: "healthcare",
-    label: "Healthcare",
-    description:
-      "Providers, payors, devices, healthcare IT.",
-    benchmarkEtf: "XLV",
-  },
-  {
-    slug: "media",
-    label: "Communications & Media",
-    description:
-      "Social platforms, streaming, telecom, advertising, content.",
-    benchmarkEtf: "XLC",
-  },
+  { slug: "tech", label: "Software & Internet", description: "SaaS, cloud infrastructure, internet platforms, and digital marketplaces.", benchmarkEtf: "XLK" },
+  { slug: "semiconductors", label: "Semiconductors", description: "Chip design, foundry, equipment makers, and silicon-adjacent hardware.", benchmarkEtf: "SOXX" },
+  { slug: "biotech", label: "Biotech", description: "Clinical-stage and early commercial therapeutics, gene editing, diagnostics.", benchmarkEtf: "XBI" },
+  { slug: "pharma", label: "Pharmaceuticals", description: "Specialty and large-cap drug developers with marketed products.", benchmarkEtf: "XPH" },
+  { slug: "fintech", label: "Financial Services & Fintech", description: "Payments, lending, banking infrastructure, capital markets technology.", benchmarkEtf: "XLF" },
+  { slug: "consumer", label: "Consumer", description: "Consumer brands, retail, footwear, apparel, food & beverage.", benchmarkEtf: "XLY" },
+  { slug: "industrial", label: "Industrial", description: "Manufacturing, machinery, transportation, defense and aerospace.", benchmarkEtf: "XLI" },
+  { slug: "energy", label: "Energy", description: "Oil, gas, renewables, energy infrastructure and services.", benchmarkEtf: "XLE" },
+  { slug: "healthcare", label: "Healthcare", description: "Providers, payors, devices, healthcare IT.", benchmarkEtf: "XLV" },
+  { slug: "media", label: "Communications & Media", description: "Social platforms, streaming, telecom, advertising, content.", benchmarkEtf: "XLC" },
 ];
 
 export function sectorLabel(slug: SectorSlug): string {
@@ -649,88 +541,20 @@ export function sectorDescription(slug: SectorSlug): string {
   return SECTORS.find((s) => s.slug === slug)?.description || "";
 }
 
-/**
- * Classify a filing into a canonical sector by keyword matching on
- * `industry` (preferred) then falling back to `sicCode` major groups.
- * Returns "other" if nothing matches.
- */
 export function canonicalSector(f: Filing): SectorSlug {
   const ind = (f.industry || "").toLowerCase();
   const sic = (f.sicCode || "").toString();
   const sicNum = parseInt(sic, 10);
 
-  // Semiconductors
-  if (
-    /semiconductor|chip|silicon|asic|fabless|foundry/.test(ind) ||
-    sic === "3674"
-  ) return "semiconductors";
-
-  // Biotech
-  if (
-    /biotech|bioscience|gene |genomic|therapeutic|clinical/.test(ind) ||
-    sic === "2836" || sic === "8731"
-  ) return "biotech";
-
-  // Pharma
-  if (
-    /pharma|drug|medicin/.test(ind) ||
-    sic === "2834" || sic === "2835"
-  ) return "pharma";
-
-  // Healthcare (providers, devices)
-  if (
-    /health|hospital|medical device|diagnostics|nursing/.test(ind) ||
-    (sicNum >= 8000 && sicNum <= 8099) ||
-    (sicNum >= 3840 && sicNum <= 3845)
-  ) return "healthcare";
-
-  // Fintech / financial
-  if (
-    /fintech|payment|bank|insur|capital markets|broker|lending|crypto|exchange/.test(ind) ||
-    (sicNum >= 6000 && sicNum <= 6799)
-  ) return "fintech";
-
-  // Media / communications
-  if (
-    /media|advertis|streaming|content|broadcasting|telecom|internet content|social/.test(ind) ||
-    (sicNum >= 2710 && sicNum <= 2790) ||
-    sic === "7812" ||
-    (sicNum >= 4810 && sicNum <= 4899)
-  ) return "media";
-
-  // Software & Internet
-  if (
-    /software|saas|cloud|internet|platform|marketplace|data/.test(ind) ||
-    (sicNum >= 7370 && sicNum <= 7379)
-  ) return "tech";
-
-  // Consumer
-  if (
-    /retail|consumer|apparel|footwear|food|beverage|restaurant|hospitality/.test(ind) ||
-    (sicNum >= 2000 && sicNum <= 2399) ||
-    (sicNum >= 3100 && sicNum <= 3199) ||
-    (sicNum >= 5000 && sicNum <= 5999) ||
-    (sicNum >= 5800 && sicNum <= 5899)
-  ) return "consumer";
-
-  // Energy
-  if (
-    /energy|oil|gas|renewable|solar|wind|battery|utility/.test(ind) ||
-    sic === "1311" || sic === "1381" ||
-    (sicNum >= 4900 && sicNum <= 4939)
-  ) return "energy";
-
-  // Industrial (catch-all manufacturing / transport)
-  if (
-    /industrial|manufactur|aerospace|defense|transport|machinery|construction|chemical|materials/.test(ind) ||
-    (sicNum >= 2400 && sicNum <= 2700) ||
-    (sicNum >= 2800 && sicNum <= 2899) ||
-    (sicNum >= 3300 && sicNum <= 3499) ||
-    (sicNum >= 3500 && sicNum <= 3590) ||
-    (sicNum >= 3600 && sicNum <= 3670) ||
-    (sicNum >= 3700 && sicNum <= 3799) ||
-    (sicNum >= 4000 && sicNum <= 4790)
-  ) return "industrial";
-
+  if (/semiconductor|chip|silicon|asic|fabless|foundry/.test(ind) || sic === "3674") return "semiconductors";
+  if (/biotech|bioscience|gene |genomic|therapeutic|clinical/.test(ind) || sic === "2836" || sic === "8731") return "biotech";
+  if (/pharma|drug|medicin/.test(ind) || sic === "2834" || sic === "2835") return "pharma";
+  if (/health|hospital|medical device|diagnostics|nursing/.test(ind) || (sicNum >= 8000 && sicNum <= 8099) || (sicNum >= 3840 && sicNum <= 3845)) return "healthcare";
+  if (/fintech|payment|bank|insur|capital markets|broker|lending|crypto|exchange/.test(ind) || (sicNum >= 6000 && sicNum <= 6799)) return "fintech";
+  if (/media|advertis|streaming|content|broadcasting|telecom|internet content|social/.test(ind) || (sicNum >= 2710 && sicNum <= 2790) || sic === "7812" || (sicNum >= 4810 && sicNum <= 4899)) return "media";
+  if (/software|saas|cloud|internet|platform|marketplace|data/.test(ind) || (sicNum >= 7370 && sicNum <= 7379)) return "tech";
+  if (/retail|consumer|apparel|footwear|food|beverage|restaurant|hospitality/.test(ind) || (sicNum >= 2000 && sicNum <= 2399) || (sicNum >= 3100 && sicNum <= 3199) || (sicNum >= 5000 && sicNum <= 5999) || (sicNum >= 5800 && sicNum <= 5899)) return "consumer";
+  if (/energy|oil|gas|renewable|solar|wind|battery|utility/.test(ind) || sic === "1311" || sic === "1381" || (sicNum >= 4900 && sicNum <= 4939)) return "energy";
+  if (/industrial|manufactur|aerospace|defense|transport|machinery|construction|chemical|materials/.test(ind) || (sicNum >= 2400 && sicNum <= 2700) || (sicNum >= 2800 && sicNum <= 2899) || (sicNum >= 3300 && sicNum <= 3499) || (sicNum >= 3500 && sicNum <= 3590) || (sicNum >= 3600 && sicNum <= 3670) || (sicNum >= 3700 && sicNum <= 3799) || (sicNum >= 4000 && sicNum <= 4790)) return "industrial";
   return "other";
 }
