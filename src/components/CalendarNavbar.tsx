@@ -1,18 +1,28 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { Radar, ExternalLink, Search } from "lucide-react";
+import {
+  Radar,
+  ExternalLink,
+  Search,
+  ChevronDown,
+  Star,
+  Briefcase,
+  Lock,
+  GitCompare,
+} from "lucide-react";
 import { Link, useLocation } from "wouter";
 import SearchPalette from "@/components/SearchPalette";
 
 /**
- * CalendarNavbar v5 — top nav with search palette and Sectors link.
+ * CalendarNavbar v6 — top nav with "More" dropdown for specialty pages.
  *
  * Save as:  calendar-app/src/components/CalendarNavbar.tsx (overwrite)
  *
- * Changes from v4:
- *   - Adds Sectors nav item
- *   - Adds Cmd/Ctrl+K search trigger (button + global hotkey)
- *   - Mounts SearchPalette in this component (always available)
+ * Changes from v5:
+ *   - Adds Watchlist as a primary nav item (with gold star)
+ *   - Adds /diffs, /lockups, /underwriters under a "Trackers ▾" dropdown
+ *     to keep the navbar tidy
+ *   - Adds /insights as a primary nav item
  */
 
 const LANDING_PAGE_URL = "https://ipo-radar-webp.vercel.app";
@@ -50,7 +60,7 @@ const logoStyle: CSSProperties = {
 const navItemsStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: "24px",
+  gap: "22px",
 };
 
 function linkStyle(active: boolean): CSSProperties {
@@ -72,7 +82,7 @@ const searchTriggerStyle: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   gap: 8,
-  padding: "6px 10px 6px 10px",
+  padding: "6px 10px",
   background: "rgba(255, 255, 255, 0.04)",
   border: "1px solid rgba(255,255,255,0.08)",
   borderRadius: 6,
@@ -82,9 +92,32 @@ const searchTriggerStyle: CSSProperties = {
   cursor: "pointer",
 };
 
+const trackerItems = [
+  {
+    href: "/diffs",
+    label: "Amendments",
+    icon: GitCompare,
+    description: "What changed in S-1/A filings",
+  },
+  {
+    href: "/lockups",
+    label: "Lockups",
+    icon: Lock,
+    description: "180-day post-IPO expirations",
+  },
+  {
+    href: "/underwriters",
+    label: "Underwriters",
+    icon: Briefcase,
+    description: "Bank league table",
+  },
+];
+
 export default function CalendarNavbar() {
   const [location] = useLocation();
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [trackersOpen, setTrackersOpen] = useState(false);
+  const trackersRef = useRef<HTMLDivElement>(null);
 
   const isActive = (path: string) => {
     if (path === "/") return location === "/";
@@ -100,7 +133,6 @@ export default function CalendarNavbar() {
         e.preventDefault();
         setPaletteOpen((v) => !v);
       } else if (e.key === "/" && !isInputFocused()) {
-        // Slash also opens search (Vim-style), only when not typing in a field
         e.preventDefault();
         setPaletteOpen(true);
       }
@@ -109,10 +141,35 @@ export default function CalendarNavbar() {
     return () => document.removeEventListener("keydown", handler);
   }, []);
 
+  // Close trackers dropdown on outside click / escape
+  useEffect(() => {
+    if (!trackersOpen) return;
+    function clickHandler(e: MouseEvent) {
+      if (
+        trackersRef.current &&
+        !trackersRef.current.contains(e.target as Node)
+      ) {
+        setTrackersOpen(false);
+      }
+    }
+    function keyHandler(e: KeyboardEvent) {
+      if (e.key === "Escape") setTrackersOpen(false);
+    }
+    document.addEventListener("mousedown", clickHandler);
+    document.addEventListener("keydown", keyHandler);
+    return () => {
+      document.removeEventListener("mousedown", clickHandler);
+      document.removeEventListener("keydown", keyHandler);
+    };
+  }, [trackersOpen]);
+
   const isMac =
     typeof navigator !== "undefined" &&
     navigator.platform.toLowerCase().includes("mac");
   const shortcutLabel = isMac ? "⌘K" : "Ctrl+K";
+
+  const trackersActive =
+    trackerItems.some((t) => isActive(t.href));
 
   return (
     <>
@@ -136,17 +193,93 @@ export default function CalendarNavbar() {
             <Link href="/sectors" style={linkStyle(isActive("/sector"))}>
               Sectors
             </Link>
+            <Link href="/insights" style={linkStyle(isActive("/insights"))}>
+              Insights
+            </Link>
             <Link href="/ipos" style={linkStyle(isActive("/ipos"))}>
               All IPOs
             </Link>
+
+            {/* Trackers dropdown */}
+            <div ref={trackersRef} style={{ position: "relative" }}>
+              <button
+                onClick={() => setTrackersOpen((v) => !v)}
+                aria-expanded={trackersOpen}
+                style={{
+                  ...linkStyle(trackersActive),
+                  background: "transparent",
+                  border: "none",
+                  padding: 0,
+                }}
+              >
+                Trackers <ChevronDown size={12} style={{ opacity: 0.65 }} />
+              </button>
+
+              {trackersOpen ? (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "calc(100% + 14px)",
+                    left: 0,
+                    minWidth: 260,
+                    background: "#131820",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    borderRadius: 8,
+                    boxShadow: "0 12px 32px rgba(0,0,0,0.5)",
+                    overflow: "hidden",
+                  }}
+                >
+                  {trackerItems.map((item) => {
+                    const Icon = item.icon;
+                    const active = isActive(item.href);
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setTrackersOpen(false)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                          padding: "12px 16px",
+                          textDecoration: "none",
+                          color: active ? "#03c8b5" : "#e4e6e8",
+                          fontFamily: 'system-ui, sans-serif',
+                          fontSize: 13,
+                          borderBottom: "1px solid rgba(255,255,255,0.04)",
+                        }}
+                      >
+                        <Icon size={14} style={{ color: "#8b9099", flexShrink: 0 }} />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 500 }}>{item.label}</div>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              color: "#8b9099",
+                              marginTop: 2,
+                              fontFamily: '"DM Mono", monospace',
+                              letterSpacing: "0.02em",
+                            }}
+                          >
+                            {item.description}
+                          </div>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+
             <Link
-              href="/underwriters"
-              style={linkStyle(isActive("/underwriters"))}
+              href="/watchlist"
+              style={{
+                ...linkStyle(isActive("/watchlist")),
+                color: isActive("/watchlist") ? "#c8a45c" : linkStyle(false).color,
+              }}
             >
-              Underwriters
-            </Link>
-            <Link href="/lockups" style={linkStyle(isActive("/lockups"))}>
-              Lockups
+              <Star size={13} fill={isActive("/watchlist") ? "#c8a45c" : "transparent"} />
+              Watchlist
             </Link>
             <a
               href={LANDING_PAGE_URL}
@@ -161,7 +294,6 @@ export default function CalendarNavbar() {
             </a>
           </div>
 
-          {/* Right side: search trigger */}
           <button
             onClick={() => setPaletteOpen(true)}
             style={searchTriggerStyle}
