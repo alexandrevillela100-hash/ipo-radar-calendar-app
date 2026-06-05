@@ -9,20 +9,19 @@ import {
   Briefcase,
   Lock,
   GitCompare,
+  Users,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import SearchPalette from "@/components/SearchPalette";
 
 /**
- * CalendarNavbar v6 — top nav with "More" dropdown for specialty pages.
+ * CalendarNavbar v7 — adds Insiders to the Trackers dropdown.
  *
  * Save as:  calendar-app/src/components/CalendarNavbar.tsx (overwrite)
  *
- * Changes from v5:
- *   - Adds Watchlist as a primary nav item (with gold star)
- *   - Adds /diffs, /lockups, /underwriters under a "Trackers ▾" dropdown
- *     to keep the navbar tidy
- *   - Adds /insights as a primary nav item
+ * Changes from v6:
+ *   - Trackers dropdown now includes /insiders alongside /diffs,
+ *     /lockups, /underwriters.
  */
 
 const LANDING_PAGE_URL = "https://ipo-radar-webp.vercel.app";
@@ -100,6 +99,12 @@ const trackerItems = [
     description: "What changed in S-1/A filings",
   },
   {
+    href: "/insiders",
+    label: "Insiders",
+    icon: Users,
+    description: "Form 4 transactions, daily",
+  },
+  {
     href: "/lockups",
     label: "Lockups",
     icon: Lock,
@@ -124,7 +129,6 @@ export default function CalendarNavbar() {
     return location.startsWith(path);
   };
 
-  // Global Cmd/Ctrl+K to open palette
   useEffect(() => {
     function handler(e: KeyboardEvent) {
       const isMac = navigator.platform.toLowerCase().includes("mac");
@@ -141,7 +145,6 @@ export default function CalendarNavbar() {
     return () => document.removeEventListener("keydown", handler);
   }, []);
 
-  // Close trackers dropdown on outside click / escape
   useEffect(() => {
     if (!trackersOpen) return;
     function clickHandler(e: MouseEvent) {
@@ -168,8 +171,7 @@ export default function CalendarNavbar() {
     navigator.platform.toLowerCase().includes("mac");
   const shortcutLabel = isMac ? "⌘K" : "Ctrl+K";
 
-  const trackersActive =
-    trackerItems.some((t) => isActive(t.href));
+  const trackersActive = trackerItems.some((t) => isActive(t.href));
 
   return (
     <>
@@ -184,21 +186,11 @@ export default function CalendarNavbar() {
           </Link>
 
           <div style={navItemsStyle}>
-            <Link href="/" style={linkStyle(isActive("/"))}>
-              Calendar
-            </Link>
-            <Link href="/pipeline" style={linkStyle(isActive("/pipeline"))}>
-              Pipeline
-            </Link>
-            <Link href="/sectors" style={linkStyle(isActive("/sector"))}>
-              Sectors
-            </Link>
-            <Link href="/insights" style={linkStyle(isActive("/insights"))}>
-              Insights
-            </Link>
-            <Link href="/ipos" style={linkStyle(isActive("/ipos"))}>
-              All IPOs
-            </Link>
+            <Link href="/" style={linkStyle(isActive("/"))}>Calendar</Link>
+            <Link href="/pipeline" style={linkStyle(isActive("/pipeline"))}>Pipeline</Link>
+            <Link href="/sectors" style={linkStyle(isActive("/sector"))}>Sectors</Link>
+            <Link href="/insights" style={linkStyle(isActive("/insights"))}>Insights</Link>
+            <Link href="/ipos" style={linkStyle(isActive("/ipos"))}>All IPOs</Link>
 
             {/* Trackers dropdown */}
             <div ref={trackersRef} style={{ position: "relative" }}>
@@ -288,9 +280,7 @@ export default function CalendarNavbar() {
               style={linkStyle(false)}
             >
               Main site
-              <ExternalLink
-                style={{ width: "12px", height: "12px", opacity: 0.65 }}
-              />
+              <ExternalLink style={{ width: "12px", height: "12px", opacity: 0.65 }} />
             </a>
           </div>
 
@@ -318,10 +308,7 @@ export default function CalendarNavbar() {
         </div>
       </nav>
 
-      <SearchPalette
-        open={paletteOpen}
-        onClose={() => setPaletteOpen(false)}
-      />
+      <SearchPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </>
   );
 }
