@@ -1,13 +1,13 @@
 // ============================================================================
-//  filingsClient.ts — v7 (adds amendmentDiff schema)
+//  filingsClient.ts — v8
 //
-//  Save as:  calendar-app/src/lib/filingsClient.ts (overwrite v6)
+//  Save as:  calendar-app/src/lib/filingsClient.ts (overwrite v7)
 //
-//  Changes from v6:
-//    - AmendmentDiff interface + Filing.amendmentDiff field
-//    - GROQ projection passes through amendmentDiff
-//    - amendmentChangeCategoryColor() helper
-//    - hasAmendmentDiff() guard
+//  Changes from v7:
+//    - InsiderTransaction interface + filing.insiderActivity field
+//    - PerformanceInfo.spy / .ipoETF now include history arrays
+//    - New helpers: hasInsiderActivity, insiderNetFlow,
+//      insiderActionLabel, insiderActionColor
 // ============================================================================
 
 import { createClient, type SanityClient } from "@sanity/client";
@@ -20,23 +20,16 @@ const apiVersion =
 
 if (!projectId && import.meta.env.MODE !== "test") {
   // eslint-disable-next-line no-console
-  console.warn(
-    "[filingsClient] VITE_SANITY_PROJECT_ID is not set — queries will fail.",
-  );
+  console.warn("[filingsClient] VITE_SANITY_PROJECT_ID is not set — queries will fail.");
 }
 
 export const filingsClient: SanityClient = createClient({
-  projectId,
-  dataset,
-  apiVersion,
-  useCdn: true,
-  perspective: "published",
+  projectId, dataset, apiVersion, useCdn: true, perspective: "published",
 });
 
 // ─── Types ──────────────────────────────────────────────────────────
 
-export type FilingType =
-  | "S-1" | "S-1/A" | "F-1" | "F-1/A" | "424B" | "RW";
+export type FilingType = "S-1" | "S-1/A" | "F-1" | "F-1/A" | "424B" | "RW";
 
 export type FilingStatus =
   | "pre-pricing" | "amended" | "pricing-window" | "trading" | "withdrawn";
@@ -46,6 +39,13 @@ export interface PricingInfo {
   offerPrice?: number;
   sharesOfferedM?: number;
   benchmarkSector?: string;
+}
+
+export interface PriceBar { date: string; price: number; }
+
+export interface BenchmarkPerf {
+  returnSinceIPO?: number;
+  history?: PriceBar[]; // NEW in v8: daily closes for overlay charts
 }
 
 export interface PerformanceInfo {
@@ -58,9 +58,9 @@ export interface PerformanceInfo {
   return30d?: number;
   return90d?: number;
   returnSinceIPO?: number;
-  spy?: { returnSinceIPO?: number };
-  ipoETF?: { returnSinceIPO?: number };
-  history?: Array<{ date: string; price: number }>;
+  spy?: BenchmarkPerf;
+  ipoETF?: BenchmarkPerf;
+  history?: PriceBar[];
 }
 
 export interface CompCompany {
@@ -83,6 +83,7 @@ export interface PnLRow {
   otherIncome?: number; preTaxIncome?: number; tax?: number;
   netIncome?: number; basicEPS?: number; dilutedEPS?: number;
 }
+
 export interface BalanceSheetRow {
   fy: string;
   cashEquivalents?: number; shortTermInvestments?: number;
@@ -95,6 +96,7 @@ export interface BalanceSheetRow {
   commonStock?: number; additionalPaidInCapital?: number;
   accumulatedDeficit?: number; totalEquity?: number;
 }
+
 export interface CashFlowRow {
   fy: string;
   netIncome?: number; depreciationAmort?: number; stockBasedComp?: number;
@@ -104,12 +106,14 @@ export interface CashFlowRow {
   debtNet?: number; dividends?: number; otherFinancing?: number;
   cff?: number; netChangeInCash?: number;
 }
+
 export interface CapTableRow {
   holder: string;
   holderType?: "founder" | "investor" | "employee" | "ipo-float" | "other";
   sharesM?: number; pctPreIPO?: number; pctPostIPO?: number;
   lockupDays?: number; notes?: string;
 }
+
 export interface FinancialsDeep {
   currency?: string; fiscalYearEnd?: string; source?: string;
   lastUpdated?: string;
@@ -117,19 +121,12 @@ export interface FinancialsDeep {
   cashFlow?: CashFlowRow[]; capTable?: CapTableRow[];
 }
 
-// ─── Amendment diff ─────────────────────────────────────────────────
+// ─── Amendment diff (unchanged from v7) ─────────────────────────────
 
 export type AmendmentChangeCategory =
-  | "Offering size"
-  | "Price range"
-  | "Share count"
-  | "Underwriters"
-  | "Risk factors"
-  | "Use of proceeds"
-  | "Financials"
-  | "Lockup terms"
-  | "Insider sale"
-  | "Other";
+  | "Offering size" | "Price range" | "Share count" | "Underwriters"
+  | "Risk factors" | "Use of proceeds" | "Financials" | "Lockup terms"
+  | "Insider sale" | "Other";
 
 export interface AmendmentChange {
   category: AmendmentChangeCategory | string;
@@ -138,13 +135,49 @@ export interface AmendmentChange {
 }
 
 export interface AmendmentDiff {
-  comparedAt?: string; // ISO timestamp
-  priorFilingType?: string; // e.g. "S-1"
-  priorFilingDate?: string; // ISO date
+  comparedAt?: string;
+  priorFilingType?: string;
+  priorFilingDate?: string;
   priorAccessionNumber?: string;
-  summary?: string; // one-sentence overview
+  summary?: string;
   changes?: AmendmentChange[];
-  source?: string; // e.g. "claude-haiku-4-5"
+  source?: string;
+}
+
+// ─── Insider transactions (NEW) ─────────────────────────────────────
+
+/**
+ * One insider transaction row from OpenInsider / Form 4.
+ * Codes: P=Purchase, S=Sale, A=Grant/Award, M=Option exercise,
+ *        F=Tax withholding, G=Gift, J=Other, D=Disposition.
+ */
+export interface InsiderTransaction {
+  filingDate?: string; // YYYY-MM-DD when Form 4 hit EDGAR
+  tradeDate?: string;  // YYYY-MM-DD of the actual trade
+  insider?: string;    // person's name
+  title?: string;      // CEO / Director / 10% Owner / etc.
+  txCode?: string;     // single-letter code
+  txType?: string;     // human label (Purchase / Sale / etc.)
+  price?: number;      // per-share USD
+  shares?: number;     // signed: positive = acquired, negative = disposed
+  valueUsd?: number;   // signed: positive = bought, negative = sold
+  ownedAfter?: number; // total shares owned after this tx
+  link?: string;       // EDGAR or OpenInsider link to the source
+}
+
+export interface InsiderActivity {
+  lastUpdated?: string;
+  source?: string;         // "openinsider.com"
+  ticker?: string;
+  transactions?: InsiderTransaction[]; // most recent first
+  // Rolled-up summaries (populated by the script, cheaper than computing on every render)
+  net30dUsd?: number;
+  net90dUsd?: number;
+  buys30d?: number;
+  sells30d?: number;
+  buys90d?: number;
+  sells90d?: number;
+  mostRecentTradeDate?: string;
 }
 
 // ─── Filing ─────────────────────────────────────────────────────────
@@ -194,6 +227,7 @@ export interface Filing {
 
   financialsDeep?: FinancialsDeep;
   amendmentDiff?: AmendmentDiff;
+  insiderActivity?: InsiderActivity; // NEW in v8
   comparables?: string[];
 }
 
@@ -202,6 +236,7 @@ const PROJECTION = /* groq */ `
   _id, companyName, ticker, exchange, industry, sicCode,
   filingType, filingDate, status, cik, accessionNumber, edgarUrl, reportSlug,
   pricing, performance, compTickers, comps, financialsDeep, amendmentDiff,
+  insiderActivity,
   "heroImageUrl": *[
     _type == "initiationReport" && defined(^.reportSlug)
     && slug.current == ^.reportSlug && status == "published"
@@ -265,7 +300,6 @@ export async function getAllFilings(): Promise<Filing[]> {
   );
 }
 
-/** Load multiple filings by reportSlug list (preserves order). */
 export async function getFilingsBySlugs(slugs: string[]): Promise<Filing[]> {
   if (slugs.length === 0) return [];
   const rows = await filingsClient.fetch<Filing[]>(
@@ -330,6 +364,24 @@ export function formatMultiple(n: number | undefined): string {
   return `${n.toFixed(1)}x`;
 }
 
+/** Format an absolute USD value with $/k/M/B suffix. */
+export function formatMoneyAbs(n: number | undefined): string {
+  if (n === undefined || n === null || Number.isNaN(n)) return "—";
+  const abs = Math.abs(n);
+  const sign = n < 0 ? "-" : "";
+  if (abs >= 1_000_000_000) return `${sign}$${(abs / 1_000_000_000).toFixed(2)}B`;
+  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(2)}M`;
+  if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(1)}K`;
+  return `${sign}$${abs.toFixed(0)}`;
+}
+
+export function formatMoneySigned(n: number | undefined): string {
+  if (n === undefined || n === null || Number.isNaN(n)) return "—";
+  if (n === 0) return "$0";
+  const sign = n > 0 ? "+" : "-";
+  return sign + formatMoneyAbs(Math.abs(n)).replace(/^[-+]/, "");
+}
+
 // ─── Pipeline classification ────────────────────────────────────────
 
 export type PipelineStage =
@@ -361,10 +413,7 @@ export function pipelineStage(f: Filing): PipelineStage {
   if (f.filingType === "RW" || f.status === "withdrawn") return "withdrawn";
   if (f.performance?.currentPrice || f.status === "trading") return "trading";
   if (f.filingType === "424B" || f.status === "pricing-window") return "pricing";
-  if (
-    f.filingType === "S-1/A" || f.filingType === "F-1/A" ||
-    f.status === "amended"
-  ) return "amended";
+  if (f.filingType === "S-1/A" || f.filingType === "F-1/A" || f.status === "amended") return "amended";
   return "filed";
 }
 
@@ -460,10 +509,8 @@ export function normalizeUnderwriter(s: string): string {
 export function underwriterSlug(name: string): string {
   return normalizeUnderwriter(name)
     .toLowerCase()
-    .replace(/&/g, "and")
-    .replace(/\./g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+    .replace(/&/g, "and").replace(/\./g, "")
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
 export function hasFinancialsDeep(f: Filing): boolean {
@@ -488,22 +535,64 @@ export function amendmentChangeColor(category: string): string {
     case "Offering size":
     case "Price range":
     case "Share count":
-      return "#c8a45c"; // gold — economic terms
+      return "#c8a45c";
     case "Risk factors":
-      return "#d86060"; // red — risk shifts
+      return "#d86060";
     case "Underwriters":
     case "Lockup terms":
     case "Insider sale":
-      return "#7a89d8"; // indigo — structural
+      return "#7a89d8";
     case "Use of proceeds":
     case "Financials":
-      return "#03c8b5"; // teal — substantive
+      return "#03c8b5";
     default:
-      return "#8b9099"; // muted
+      return "#8b9099";
   }
 }
 
-// ─── Sector classification ──────────────────────────────────────────
+// ─── Insider helpers (NEW) ──────────────────────────────────────────
+
+export function hasInsiderActivity(f: Filing): boolean {
+  return (f.insiderActivity?.transactions?.length ?? 0) > 0;
+}
+
+export function insiderActionLabel(code: string | undefined): string {
+  if (!code) return "—";
+  const c = code.toUpperCase().trim();
+  switch (c) {
+    case "P": return "Purchase";
+    case "S": return "Sale";
+    case "A": return "Award";
+    case "M": return "Option exercise";
+    case "F": return "Tax withholding";
+    case "G": return "Gift";
+    case "D": return "Disposition";
+    case "J": return "Other";
+    default: return c;
+  }
+}
+
+export function insiderActionColor(code: string | undefined): string {
+  if (!code) return "#8b9099";
+  const c = code.toUpperCase().trim();
+  if (c === "P") return "#03c8b5"; // buy — teal
+  if (c === "S" || c === "D") return "#d86060"; // sale — red
+  if (c === "A" || c === "M") return "#c8a45c"; // grants / exercises — gold
+  return "#8b9099"; // other — muted
+}
+
+/**
+ * Aggregate signed $ value across a transaction list. Buys positive,
+ * sales negative.
+ */
+export function insiderNetFlow(
+  txs: InsiderTransaction[] | undefined,
+): number {
+  if (!txs || txs.length === 0) return 0;
+  return txs.reduce((sum, t) => sum + (t.valueUsd ?? 0), 0);
+}
+
+// ─── Sector classification (unchanged) ──────────────────────────────
 
 export type SectorSlug =
   | "tech" | "semiconductors" | "biotech" | "pharma" | "fintech"
@@ -532,11 +621,9 @@ export const SECTORS: SectorDef[] = [
 export function sectorLabel(slug: SectorSlug): string {
   return SECTORS.find((s) => s.slug === slug)?.label || slug;
 }
-
 export function sectorEtf(slug: SectorSlug): string | undefined {
   return SECTORS.find((s) => s.slug === slug)?.benchmarkEtf;
 }
-
 export function sectorDescription(slug: SectorSlug): string {
   return SECTORS.find((s) => s.slug === slug)?.description || "";
 }
@@ -545,7 +632,6 @@ export function canonicalSector(f: Filing): SectorSlug {
   const ind = (f.industry || "").toLowerCase();
   const sic = (f.sicCode || "").toString();
   const sicNum = parseInt(sic, 10);
-
   if (/semiconductor|chip|silicon|asic|fabless|foundry/.test(ind) || sic === "3674") return "semiconductors";
   if (/biotech|bioscience|gene |genomic|therapeutic|clinical/.test(ind) || sic === "2836" || sic === "8731") return "biotech";
   if (/pharma|drug|medicin/.test(ind) || sic === "2834" || sic === "2835") return "pharma";
