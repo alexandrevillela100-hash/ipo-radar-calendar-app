@@ -14,11 +14,13 @@ import {
 } from "lucide-react";
 import FactSheetChat from "@/components/FactSheetChat";
 import PerformanceSection from "@/components/PerformanceSection";
+import PerformanceVsBenchmark from "@/components/PerformanceVsBenchmark";
 import ComparablesSection from "@/components/ComparablesSection";
 import DownloadFinancialsButton from "@/components/DownloadFinancialsButton";
 import CompareWithButton from "@/components/CompareWithButton";
 import StarButton from "@/components/StarButton";
 import AmendmentDiffSection from "@/components/AmendmentDiffSection";
+import InsiderActivitySection from "@/components/InsiderActivitySection";
 import {
   getFilingBySlug,
   filingTypeColor,
@@ -30,14 +32,16 @@ import {
 import { useDocumentMeta } from "@/lib/useDocumentMeta";
 
 /**
- * FactSheet — v9.
+ * FactSheet — v10.
  *
- * Save as:  calendar-app/src/pages/FactSheet.tsx (overwrite v8)
+ * Save as:  calendar-app/src/pages/FactSheet.tsx (overwrite v9)
  *
- * Changes from v8:
- *   - Adds StarButton (chip variant) into the CTA bar
- *   - Adds AmendmentDiffSection between Performance and The Offering
- *     when filing.amendmentDiff exists
+ * Changes from v9:
+ *   - Adds PerformanceVsBenchmark right after the existing
+ *     PerformanceSection (when SPY history is present)
+ *   - Adds InsiderActivitySection after Comparables (when an
+ *     insiderActivity field exists, even if empty — empty state is
+ *     handled inside the component)
  */
 
 const COLORS = {
@@ -107,11 +111,7 @@ function shortDate(iso: string | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
 
 function formatMoney(n: number | undefined): string {
@@ -225,7 +225,7 @@ export default function FactSheet() {
 
   return (
     <div style={pageStyle}>
-      {/* ── Hero ────────────────────────────────────────────────── */}
+      {/* Hero */}
       <section style={{ position: "relative" }}>
         <div
           style={{
@@ -250,7 +250,6 @@ export default function FactSheet() {
               }}
             />
           ) : null}
-
           <div
             style={{
               position: "absolute",
@@ -260,8 +259,6 @@ export default function FactSheet() {
               pointerEvents: "none",
             }}
           />
-
-          {/* Star button in top-right corner */}
           <div
             style={{
               position: "absolute",
@@ -272,7 +269,6 @@ export default function FactSheet() {
           >
             <StarButton slug={filing.reportSlug} variant="chip" size={14} />
           </div>
-
           <div
             style={{
               ...containerStyle,
@@ -297,7 +293,6 @@ export default function FactSheet() {
             >
               {filing.filingType} · {shortDate(filing.filingDate)}
             </div>
-
             <h1
               style={{
                 fontFamily: FONTS.serif,
@@ -312,7 +307,6 @@ export default function FactSheet() {
             >
               {filing.companyName}
             </h1>
-
             <div
               style={{
                 fontFamily: FONTS.mono,
@@ -376,7 +370,10 @@ export default function FactSheet() {
       {/* Performance */}
       {filing.performance ? <PerformanceSection filing={filing} /> : null}
 
-      {/* Amendment diff (NEW) */}
+      {/* Alpha vs benchmarks (NEW) */}
+      <PerformanceVsBenchmark filing={filing} />
+
+      {/* Amendment diff */}
       {hasAmendmentDiff(filing) ? <AmendmentDiffSection filing={filing} /> : null}
 
       {/* The Offering */}
@@ -499,6 +496,9 @@ export default function FactSheet() {
 
       {/* Comparables */}
       {filing.comps && filing.comps.length > 0 ? <ComparablesSection filing={filing} /> : null}
+
+      {/* Insider activity (NEW) */}
+      <InsiderActivitySection filing={filing} />
 
       {/* Bankers & Peers */}
       {(filing.leadUnderwriters && filing.leadUnderwriters.length > 0) ||
