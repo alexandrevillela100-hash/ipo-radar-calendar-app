@@ -11,10 +11,11 @@ import Sector from "@/pages/Sector";
 import Watchlist from "@/pages/Watchlist";
 import Diffs from "@/pages/Diffs";
 import Insights from "@/pages/Insights";
+import Insiders from "@/pages/Insiders";
 import CalendarNavbar from "@/components/CalendarNavbar";
 
 /**
- * App v6 — adds /watchlist, /diffs, /insights routes.
+ * App v7 — adds /insiders route.
  *
  * Save as:  calendar-app/src/App.tsx (overwrite)
  */
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="/watchlist" component={Watchlist} />
         <Route path="/diffs" component={Diffs} />
         <Route path="/insights" component={Insights} />
+        <Route path="/insiders" component={Insiders} />
         <Route>
           <div
             style={{
